@@ -26,6 +26,12 @@ body {
   width: 100%;
 }
 
+.app-shell--wide {
+  max-width: none;
+  width: 100%;
+  padding: 0 clamp(1rem, 2.5vw, 3rem) 3rem;
+}
+
 .app-header {
   display: flex;
   align-items: center;
@@ -760,6 +766,17 @@ body {
 
 .completion-progress-step.current .completion-progress-label {
   color: var(--color-primary-dark);
+}
+
+.completion-ready-notice {
+  margin: 1rem 0 0;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  background: rgba(34, 197, 94, 0.14);
+  color: #166534;
+  font-weight: 600;
+  line-height: 1.6;
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.18);
 }
 
 .completion-ticket-value,

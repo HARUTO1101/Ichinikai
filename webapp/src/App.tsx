@@ -1,15 +1,21 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AdminPage } from './pages/AdminPage'
 import { StatusPage } from './pages/StatusPage'
 import { OrderFlowProvider } from './context/OrderFlowContext'
+import { OrderToastProvider } from './context/OrderToastContext'
 import { OrderInputPage } from './pages/OrderInputPage'
 import { OrderReviewPage } from './pages/OrderReviewPage'
 import { OrderCompletePage } from './pages/OrderCompletePage'
 import { OrderProgressPage } from './pages/OrderProgressPage'
 import { TicketNotFoundPage } from './pages/TicketNotFoundPage'
+import { KitchenDashboardPage } from './pages/KitchenDashboardPage'
+import { OrderToastViewport } from './components/OrderToastViewport'
 import './App.css'
 
-const navItems = [{ to: '/admin', label: '管理者ページ' }]
+const navItems = [
+  { to: '/admin', label: '管理者ページ' },
+  { to: '/kitchen', label: 'キッチン用' },
+]
 
 const actionItems = (
   [
@@ -28,10 +34,18 @@ function NotFound() {
 }
 
 function App() {
+  const location = useLocation()
+  const isAdminRoute = location.pathname.startsWith('/admin')
+  const shellClassName = ['app-shell', isAdminRoute ? 'app-shell--wide' : '']
+    .filter(Boolean)
+    .join(' ')
+  const toastVariant = isAdminRoute ? 'light' : 'dark'
+
   return (
-    <OrderFlowProvider>
-      <div className="app-shell">
-        <header className="app-header">
+    <OrderToastProvider>
+      <OrderFlowProvider>
+        <div className={shellClassName}>
+          <header className="app-header">
           <div className="brand">
             <span aria-hidden="true" className="brand-icon">
               🧇
@@ -82,29 +96,32 @@ function App() {
             </div>
           </div>
         </header>
-        <main className="app-main">
-          <Routes>
-            <Route path="/" element={<Navigate to="/order" replace />} />
-            <Route path="/order" element={<OrderInputPage />} />
-            <Route path="/order/review" element={<OrderReviewPage />} />
-            <Route path="/order/complete" element={<OrderCompletePage />} />
-            <Route path="/order/complete/:ticket" element={<OrderCompletePage />} />
-            <Route path="/order/not-found" element={<TicketNotFoundPage />} />
-            <Route path="/status" element={<StatusPage />} />
-            <Route path="/progress" element={<OrderProgressPage />} />
-            <Route path="/progress/:ticket" element={<OrderProgressPage />} />
-            <Route path="/admin/*" element={<AdminPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </main>
-        <footer className="app-footer">
-          <p>
-            &copy; {new Date().getFullYear()} 学園祭キッチンカー実行委員会. All rights
-            reserved.
-          </p>
-        </footer>
-      </div>
-    </OrderFlowProvider>
+          <main className="app-main">
+            <Routes>
+              <Route path="/" element={<Navigate to="/order" replace />} />
+              <Route path="/order" element={<OrderInputPage />} />
+              <Route path="/order/review" element={<OrderReviewPage />} />
+              <Route path="/order/complete" element={<OrderCompletePage />} />
+              <Route path="/order/complete/:ticket" element={<OrderCompletePage />} />
+              <Route path="/order/not-found" element={<TicketNotFoundPage />} />
+              <Route path="/status" element={<StatusPage />} />
+              <Route path="/progress" element={<OrderProgressPage />} />
+              <Route path="/progress/:ticket" element={<OrderProgressPage />} />
+              <Route path="/kitchen" element={<KitchenDashboardPage />} />
+              <Route path="/admin/*" element={<AdminPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </main>
+          <footer className="app-footer">
+            <p>
+              &copy; {new Date().getFullYear()} 学園祭キッチンカー実行委員会. All rights
+              reserved.
+            </p>
+          </footer>
+        </div>
+        <OrderToastViewport variant={toastVariant} ariaLabel="新着通知" />
+      </OrderFlowProvider>
+    </OrderToastProvider>
   )
 }
 

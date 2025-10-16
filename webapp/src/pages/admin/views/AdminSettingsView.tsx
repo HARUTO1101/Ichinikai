@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { triggerKitchenToastTest } from '../../../events/kitchenToastTest'
 
 const themes = [
   { id: 'system', label: 'システム設定に追従' },
@@ -57,6 +58,13 @@ export function AdminSettingsView() {
             />
             新規注文時にサウンドを鳴らす
           </label>
+          <button
+            type="button"
+            className="admin-secondary-button"
+            onClick={() => triggerKitchenToastTest()}
+          >
+            トースト通知をテスト表示
+          </button>
         </div>
       </section>
 

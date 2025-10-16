@@ -14,7 +14,7 @@ export function AdminOrdersView() {
       .filter((order) => (paymentFilter === 'すべて' ? true : order.payment === paymentFilter))
       .filter((order) => {
         if (!keyword.trim()) return true
-        const target = `${order.id} ${order.ticket} ${order.items}`.toLowerCase()
+        const target = `${order.id} ${order.ticket} ${order.callNumber} ${order.items}`.toLowerCase()
         return target.includes(keyword.trim().toLowerCase())
       })
       .sort(
@@ -50,6 +50,7 @@ export function AdminOrdersView() {
             <option value="すべて">すべて</option>
             <option value="支払い済み">支払い済み</option>
             <option value="未払い">未払い</option>
+            <option value="キャンセル">キャンセル</option>
           </select>
         </div>
         <div className="field" style={{ flex: '1 1 240px' }}>
@@ -57,7 +58,7 @@ export function AdminOrdersView() {
           <input
             id="order-search"
             type="search"
-            placeholder="注文番号・チケット・品目"
+            placeholder="呼出番号・確認コード・注文番号"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
           />
@@ -76,7 +77,8 @@ export function AdminOrdersView() {
             <tr>
               <th scope="col">時刻</th>
               <th scope="col">注文番号</th>
-              <th scope="col">チケット</th>
+              <th scope="col">呼出番号</th>
+              <th scope="col">進捗確認コード</th>
               <th scope="col">品目</th>
               <th scope="col">合計</th>
               <th scope="col">支払い</th>
@@ -89,6 +91,7 @@ export function AdminOrdersView() {
               <tr key={order.id}>
                 <td>{order.createdAt}</td>
                 <td>{order.id}</td>
+                <td>{order.callNumber}</td>
                 <td>{order.ticket}</td>
                 <td>{order.items}</td>
                 <td>{order.total.toLocaleString()} 円</td>
@@ -97,7 +100,9 @@ export function AdminOrdersView() {
                     className={
                       order.payment === '支払い済み'
                         ? 'admin-status-badge success'
-                        : 'admin-status-badge warning'
+                        : order.payment === '未払い'
+                          ? 'admin-status-badge warning'
+                          : 'admin-status-badge neutral'
                     }
                   >
                     {order.payment}

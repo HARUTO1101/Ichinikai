@@ -3,8 +3,11 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   Timestamp,
   where,
@@ -66,6 +69,12 @@ function toDate(timestamp?: Timestamp) {
   return timestamp ? timestamp.toDate() : undefined
 }
 
+interface SubscribeOptions {
+  onError?: (error: unknown) => void
+}
+
+const NEW_ORDER_QUERY_LIMIT = 20
+
 export async function createOrderFirebase(
   rawItems: Record<MenuItemKey, number>,
 ): Promise<OrderSummary> {
@@ -82,38 +91,56 @@ export async function createOrderFirebase(
   const total = calculateTotal(items)
   const payment: PaymentStatus = '未払い'
   const progress: ProgressStatus = '受注済み'
-
-  const batch = writeBatch(db)
-
   const orderRef = doc(db, 'orders', orderId)
   const lookupRef = doc(db, 'orderLookup', ticket)
+  const countersRef = doc(db, 'metadata', 'counters')
 
-  batch.set(orderRef, {
-    orderId,
-    createdBy: auth.currentUser?.uid ?? null,
-    items,
-    total,
-    payment,
-    progress,
-    ticket,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+  const callNumber = await runTransaction(db, async (tx) => {
+    const countersSnap = await tx.get(countersRef)
+    const lastCallNumber = (countersSnap.data()?.lastCallNumber as number | undefined) ?? 0
+    const nextCallNumber = lastCallNumber + 1
+
+    tx.set(
+      countersRef,
+      {
+        lastCallNumber: nextCallNumber,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    )
+
+    const timestamp = serverTimestamp()
+    tx.set(orderRef, {
+      orderId,
+      ticket,
+      callNumber: nextCallNumber,
+      createdBy: auth.currentUser?.uid ?? null,
+      items,
+      total,
+      payment,
+      progress,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })
+
+    tx.set(lookupRef, {
+      orderId,
+      ticket,
+      callNumber: nextCallNumber,
+      items,
+      total,
+      payment,
+      progress,
+      updatedAt: timestamp,
+    })
+
+    return nextCallNumber
   })
-
-  batch.set(lookupRef, {
-    orderId,
-    items,
-    total,
-    payment,
-    progress,
-    updatedAt: serverTimestamp(),
-  })
-
-  await batch.commit()
 
   return {
     orderId,
     ticket,
+    callNumber,
     total,
     items,
     payment,
@@ -138,6 +165,7 @@ export async function fetchOrderByTicketFirebase(
   return {
     orderId: data.orderId,
     ticket: trimmed,
+    callNumber: (data.callNumber as number | undefined) ?? 0,
     total: data.total,
     items: data.items,
     payment: data.payment,
@@ -158,6 +186,7 @@ export async function fetchOrderDetailFirebase(
   return {
     orderId: data.orderId as string,
     ticket: data.ticket as string,
+    callNumber: (data.callNumber as number | undefined) ?? 0,
     items: data.items as Record<MenuItemKey, number>,
     total: data.total as number,
     payment: data.payment as PaymentStatus,
@@ -221,6 +250,7 @@ export async function searchOrderByTicketOrIdFirebase(
   return {
     orderId: data.orderId as string,
     ticket: data.ticket as string,
+    callNumber: (data.callNumber as number | undefined) ?? 0,
     items: data.items as Record<MenuItemKey, number>,
     total: data.total as number,
     payment: data.payment as PaymentStatus,
@@ -253,6 +283,7 @@ export async function fetchKitchenOrdersFirebase(
     return {
       orderId: data.orderId as string,
       ticket: data.ticket as string,
+      callNumber: (data.callNumber as number | undefined) ?? 0,
       items: data.items as Record<MenuItemKey, number>,
       total: data.total as number,
       payment: data.payment as PaymentStatus,
@@ -262,6 +293,57 @@ export async function fetchKitchenOrdersFirebase(
       createdBy: (data.createdBy as string | null | undefined) ?? null,
     }
   })
+}
+
+export function subscribeNewOrdersFirebase(
+  onAdded: (order: OrderDetail) => void,
+  options: SubscribeOptions = {},
+): () => void {
+  const ordersRef = collection(db, 'orders')
+  const snapshotQuery = query(ordersRef, orderBy('createdAt', 'desc'), limit(NEW_ORDER_QUERY_LIMIT))
+  const seenIds = new Set<string>()
+  let initialized = false
+
+  const unsubscribe = onSnapshot(
+    snapshotQuery,
+    (snapshot) => {
+      if (!initialized) {
+        snapshot.docs.forEach((docSnap) => seenIds.add(docSnap.id))
+        initialized = true
+        return
+      }
+
+      snapshot
+        .docChanges()
+        .filter((change) => change.type === 'added')
+        .forEach((change) => {
+          const docId = change.doc.id
+          if (seenIds.has(docId)) return
+          seenIds.add(docId)
+
+          const data = change.doc.data()
+
+          onAdded({
+            orderId: data.orderId as string,
+            ticket: data.ticket as string,
+            callNumber: (data.callNumber as number | undefined) ?? 0,
+            items: data.items as Record<MenuItemKey, number>,
+            total: data.total as number,
+            payment: data.payment as PaymentStatus,
+            progress: data.progress as ProgressStatus,
+            createdAt: toDate(data.createdAt as Timestamp | undefined),
+            updatedAt: toDate(data.updatedAt as Timestamp | undefined),
+            createdBy: (data.createdBy as string | null | undefined) ?? null,
+          })
+        })
+    },
+    (error) => {
+      console.error('Failed to subscribe new orders', error)
+      options.onError?.(error)
+    },
+  )
+
+  return unsubscribe
 }
 
 function escapeCsv(value: string | number | null | undefined) {
@@ -279,6 +361,7 @@ export async function exportOrdersCsvFirebase() {
 
   const headers = [
     'orderId',
+    'callNumber',
     'ticket',
     'total',
     'payment',
@@ -297,6 +380,7 @@ export async function exportOrdersCsvFirebase() {
 
     return [
       data.orderId,
+      data.callNumber ?? '',
       data.ticket,
       data.total,
       data.payment,

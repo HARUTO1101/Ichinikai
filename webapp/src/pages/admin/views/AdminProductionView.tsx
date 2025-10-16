@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { dummyOrders, type OrderRow } from './adminOrdersData'
 
-type ProductionStageKey = 'ordered' | 'cooking' | 'ready'
+type ProductionStageKey = 'ordered' | 'plating'
 
 const productionColumns: Array<{
   key: ProductionStageKey
@@ -10,8 +10,7 @@ const productionColumns: Array<{
   statuses: Array<OrderRow['progress']>
 }> = [
   { key: 'ordered', label: '受注済み', hint: '受付済み・仕込み待ち', statuses: ['受注済み'] },
-  { key: 'cooking', label: '調理中', hint: 'キッチンで調理中', statuses: ['調理中'] },
-  { key: 'ready', label: '調理済み', hint: '受取可／クローズ済み', statuses: ['受取可', 'クローズ'] },
+  { key: 'plating', label: '調理済み', hint: 'お渡し待ち／クローズ済み', statuses: ['調理済み', 'クローズ'] },
 ]
 
 export function AdminProductionView() {
@@ -31,8 +30,7 @@ export function AdminProductionView() {
   const summary = useMemo(
     () => ({
       ordered: columns.find((column) => column.key === 'ordered')?.orders.length ?? 0,
-      cooking: columns.find((column) => column.key === 'cooking')?.orders.length ?? 0,
-      ready: columns.find((column) => column.key === 'ready')?.orders.length ?? 0,
+      plating: columns.find((column) => column.key === 'plating')?.orders.length ?? 0,
     }),
     [columns],
   )
@@ -43,16 +41,14 @@ export function AdminProductionView() {
         if (order.id !== id) return order
 
         if (direction === 'forward') {
-          if (order.progress === '受注済み') return { ...order, progress: '調理中' }
-          if (order.progress === '調理中') return { ...order, progress: '受取可' }
-          if (order.progress === '受取可') return { ...order, progress: 'クローズ' }
+          if (order.progress === '受注済み') return { ...order, progress: '調理済み' }
+          if (order.progress === '調理済み') return { ...order, progress: 'クローズ' }
           return order
         }
 
         if (direction === 'back') {
-          if (order.progress === '調理中') return { ...order, progress: '受注済み' }
-          if (order.progress === '受取可') return { ...order, progress: '調理中' }
-          if (order.progress === 'クローズ') return { ...order, progress: '受取可' }
+          if (order.progress === '調理済み') return { ...order, progress: '受注済み' }
+          if (order.progress === 'クローズ') return { ...order, progress: '調理済み' }
           return order
         }
 
@@ -70,18 +66,13 @@ export function AdminProductionView() {
           <p className="admin-production-summary-hint">受付済み・仕込み待ち</p>
         </div>
         <div className="admin-production-summary">
-          <p className="admin-production-summary-title">調理中</p>
-          <p className="admin-production-summary-count">{summary.cooking}件</p>
-          <p className="admin-production-summary-hint">キッチンで対応中</p>
-        </div>
-        <div className="admin-production-summary">
           <p className="admin-production-summary-title">調理済み</p>
-          <p className="admin-production-summary-count">{summary.ready}件</p>
-          <p className="admin-production-summary-hint">受取可／クローズ済み</p>
+          <p className="admin-production-summary-count">{summary.plating}件</p>
+          <p className="admin-production-summary-hint">お渡し待ち／クローズ済み</p>
         </div>
       </div>
 
-      <div className="admin-production-table" role="table" aria-label="制作フロー一覧">
+      <div className="admin-production-table" role="table" aria-label="盛り付けライン一覧">
         <div className="admin-production-table-header" role="row">
           {columns.map((column) => (
             <div key={column.key} className="admin-production-table-header-cell" role="columnheader">
@@ -131,13 +122,11 @@ function ProductionRow({ order, onForward, onBack, allowForward, allowBack }: Pr
   return (
     <article className="admin-production-row">
       <div className="admin-production-row-main">
-        <p className="admin-production-ticket">
-          <span aria-hidden>🎫</span>
-          {order.ticket}
+        <p className="admin-production-ticket" aria-label={`呼出番号 ${order.callNumber}`}>
+          <span className="admin-payment-ticket badge">{order.callNumber}</span>
         </p>
+        <p className="admin-production-code">確認コード {order.ticket}</p>
         <p className="admin-production-items">{order.items}</p>
-        {order.customer && <p className="admin-production-customer">{order.customer} 様</p>}
-        {order.note && <p className="admin-production-note">メモ: {order.note}</p>}
       </div>
       <div className="admin-production-row-meta">
         <span className="admin-production-time">{order.createdAt}</span>

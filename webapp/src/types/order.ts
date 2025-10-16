@@ -6,7 +6,7 @@ export type MenuItemKey =
   | 'potaufeu'
 
 export type PaymentStatus = '未払い' | '支払い済み'
-export type ProgressStatus = '受注済み' | '調理中' | '受取可' | 'クローズ'
+export type ProgressStatus = '受注済み' | '調理済み' | 'クローズ'
 
 export interface MenuItem {
   key: MenuItemKey
@@ -58,7 +58,7 @@ export const MENU_ITEM_LIST: MenuItem[] = Object.values(MENU_ITEMS)
 
 export const PAYMENT_STATUSES: PaymentStatus[] = ['未払い', '支払い済み']
 
-export const PROGRESS_STATUSES: ProgressStatus[] = ['受注済み', '調理中', '受取可']
+export const PROGRESS_STATUSES: ProgressStatus[] = ['受注済み', '調理済み']
 
 export interface OrderInputValues {
   items: Record<MenuItemKey, number>
@@ -67,6 +67,7 @@ export interface OrderInputValues {
 export interface OrderSummary {
   orderId: string
   ticket: string
+  callNumber: number
   total: number
   items: Record<MenuItemKey, number>
   payment: PaymentStatus
@@ -76,6 +77,7 @@ export interface OrderSummary {
 export interface OrderLookupResult {
   orderId: string
   ticket: string
+  callNumber: number
   total: number
   items: Record<MenuItemKey, number>
   payment: PaymentStatus

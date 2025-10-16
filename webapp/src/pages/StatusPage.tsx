@@ -7,7 +7,7 @@ import { extractTicketFromInput } from '../utils/ticket'
 
 export function StatusPage() {
   const navigate = useNavigate()
-  const [ticket, setTicket] = useState('')
+  const [progressCode, setProgressCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [scannerActive, setScannerActive] = useState(false)
   const orderHistory = useOrderHistory()
@@ -17,33 +17,33 @@ export function StatusPage() {
     setError(null)
 
     if (!normalized) {
-      setError('チケット番号を入力してください。')
+      setError('進捗確認コードを入力してください。')
       return
     }
 
-    setTicket(normalized)
+    setProgressCode(normalized)
     navigate(`/order/complete/${normalized}`)
   }
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    redirectToTicket(ticket)
+    redirectToTicket(progressCode)
   }
 
   const handleScannerResult = (value: string) => {
     const normalized = extractTicketFromInput(value)
     if (!normalized) {
-      setError('有効なチケット番号を読み取れませんでした。')
+      setError('有効な進捗確認コードを読み取れませんでした。')
       setScannerActive(false)
       return
     }
-    setTicket(normalized)
+    setProgressCode(normalized)
     setScannerActive(false)
     navigate(`/order/complete/${normalized}`)
   }
 
   const handleHistorySelect = (entry: OrderHistoryEntry) => {
-    setTicket(entry.ticket)
+    setProgressCode(entry.ticket)
     setScannerActive(false)
     navigate(`/order/complete/${entry.ticket}`)
   }
@@ -59,18 +59,18 @@ export function StatusPage() {
       <section className="content-card">
         <h1 className="section-title">注文の進捗を確認する</h1>
         <p className="section-description">
-          チケット番号（16桁）を入力するか、QRコードを読み取って進捗を確認できます。
+          進捗確認コード（QRコードまたはリンクに記載）を入力するか、QRコードを読み取って進捗を確認できます。
         </p>
 
         <form className="form-grid" onSubmit={handleSubmit}>
           <div className="field">
-            <label htmlFor="ticket">チケット番号</label>
+            <label htmlFor="ticket">進捗確認コード</label>
             <input
               id="ticket"
               type="text"
               inputMode="text"
-              value={ticket}
-              onChange={(event) => setTicket(event.target.value.toUpperCase())}
+              value={progressCode}
+              onChange={(event) => setProgressCode(event.target.value.toUpperCase())}
               placeholder="例: AB12CD34EF56GH78"
               maxLength={20}
             />
@@ -115,7 +115,7 @@ export function StatusPage() {
             </button>
           </div>
           <p className="history-description">
-            直近にこの端末から確定した注文を表示しています。タップするとチケット番号を使って進捗を再検索できます。
+            直近にこの端末から確定した注文を表示しています。タップすると進捗確認コードを使って進捗を再検索できます。
           </p>
           <ul className="order-history-list">
             {orderHistory.map((entry) => (
@@ -126,7 +126,7 @@ export function StatusPage() {
                   onClick={() => handleHistorySelect(entry)}
                 >
                   <div className="order-history-row">
-                    <span className="order-history-ticket" aria-label="チケット番号">
+                    <span className="order-history-ticket" aria-label="進捗確認コード">
                       {entry.ticket}
                     </span>
                     <span className="order-history-date">
@@ -134,7 +134,9 @@ export function StatusPage() {
                     </span>
                   </div>
                   <div className="order-history-row meta">
-                    <span>注文番号: {entry.orderId}</span>
+                    <span>
+                      呼出番号: {entry.callNumber > 0 ? entry.callNumber : '準備中 / 未設定'}
+                    </span>
                     <span>合計: ¥{entry.total.toLocaleString()}</span>
                   </div>
                 </button>

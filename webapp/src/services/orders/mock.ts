@@ -7,6 +7,7 @@ import {
   type OrderSummary,
   type PaymentStatus,
   type ProgressStatus,
+  type KitchenOrdersQuery,
 } from '../../types/order'
 
 interface StoredOrder extends OrderDetail {
@@ -16,13 +17,29 @@ interface StoredOrder extends OrderDetail {
 
 interface MockState {
   orders: StoredOrder[]
+  lastCallNumber: number
 }
 
 const STORAGE_KEY = 'mock-orders-state-v1'
 
+const newOrderListeners = new Set<(order: OrderDetail) => void>()
+
+function emitNewOrder(order: StoredOrder) {
+  newOrderListeners.forEach((listener) => {
+    try {
+      listener({ ...order })
+    } catch (error) {
+      console.error('モック新規注文通知でエラーが発生しました', error)
+    }
+  })
+}
+
 function reviveState(raw: unknown): MockState {
   if (!raw || typeof raw !== 'object') return fallbackState
-  const parsed = raw as { orders?: Array<Record<string, unknown>> }
+  const parsed = raw as {
+    orders?: Array<Record<string, unknown>>
+    lastCallNumber?: number
+  }
   const orders = (parsed.orders ?? []).map((order) => {
     const createdAt = order.createdAt ? new Date(order.createdAt as string) : undefined
     const updatedAt = order.updatedAt ? new Date(order.updatedAt as string) : undefined
@@ -35,7 +52,10 @@ function reviveState(raw: unknown): MockState {
   if (orders.length === 0) {
     return fallbackState
   }
-  return { orders }
+  const lastCallNumber = Number.isFinite(parsed.lastCallNumber)
+    ? Number(parsed.lastCallNumber)
+    : Math.max(0, ...orders.map((order) => order.callNumber ?? 0))
+  return { orders, lastCallNumber }
 }
 
 function loadState(): MockState {
@@ -61,6 +81,7 @@ function persistState(state: MockState) {
         createdAt: order.createdAt?.toISOString() ?? null,
         updatedAt: order.updatedAt?.toISOString() ?? null,
       })),
+      lastCallNumber: state.lastCallNumber,
     }
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable))
   } catch (error) {
@@ -114,6 +135,7 @@ const fallbackState: MockState = {
     {
       orderId: 'ORD-20251009090000-DEMO',
       ticket: 'MOCKTICKET123456',
+      callNumber: 1,
       items: fallbackOrderItems,
       total: calculateTotal(fallbackOrderItems),
       payment: '未払い',
@@ -123,6 +145,7 @@ const fallbackState: MockState = {
       createdBy: 'mock-user',
     },
   ],
+  lastCallNumber: 1,
 }
 
 let state = loadState()
@@ -130,6 +153,7 @@ let state = loadState()
 function updateState(mutator: (draft: MockState) => void) {
   const draft: MockState = {
     orders: state.orders.map((order) => ({ ...order })),
+    lastCallNumber: state.lastCallNumber,
   }
   mutator(draft)
   state = draft
@@ -158,10 +182,12 @@ export async function createOrderMock(
   const total = calculateTotal(items)
   const payment: PaymentStatus = '未払い'
   const progress: ProgressStatus = '受注済み'
+  const callNumber = state.lastCallNumber + 1
 
   const order: StoredOrder = {
     orderId,
     ticket,
+    callNumber,
     items,
     total,
     payment,
@@ -173,11 +199,15 @@ export async function createOrderMock(
 
   updateState((draft) => {
     draft.orders.push(order)
+    draft.lastCallNumber = callNumber
   })
+
+  emitNewOrder(order)
 
   return {
     orderId,
     ticket,
+    callNumber,
     total,
     items,
     payment,
@@ -193,6 +223,7 @@ export async function fetchOrderByTicketMock(
   return {
     orderId: order.orderId,
     ticket: order.ticket,
+    callNumber: order.callNumber,
     items: order.items,
     total: order.total,
     payment: order.payment,
@@ -240,9 +271,36 @@ export async function searchOrderByTicketOrIdMock(
   return byId ? { ...byId } : null
 }
 
+export async function fetchKitchenOrdersMock(
+  options: KitchenOrdersQuery = {},
+): Promise<OrderDetail[]> {
+  const { start, end } = options
+  const startMs = start?.getTime()
+  const endMs = end?.getTime()
+
+  return state.orders
+    .filter((order) => {
+      const reference = order.createdAt ?? order.updatedAt
+      if (!reference) {
+        return !startMs && !endMs
+      }
+      const time = reference.getTime()
+      if (typeof startMs === 'number' && time < startMs) return false
+      if (typeof endMs === 'number' && time >= endMs) return false
+      return true
+    })
+    .sort((a, b) => {
+      const aTime = (a.createdAt ?? a.updatedAt ?? new Date(0)).getTime()
+      const bTime = (b.createdAt ?? b.updatedAt ?? new Date(0)).getTime()
+      return aTime - bTime
+    })
+    .map((order) => ({ ...order }))
+}
+
 export async function exportOrdersCsvMock() {
   const headers = [
     'orderId',
+    'callNumber',
     'ticket',
     'total',
     'payment',
@@ -259,6 +317,7 @@ export async function exportOrdersCsvMock() {
 
     return [
       order.orderId,
+      order.callNumber ?? '',
       order.ticket,
       order.total,
       order.payment,
@@ -287,7 +346,10 @@ export async function exportOrdersCsvMock() {
 }
 
 export function resetMockData() {
-  state = fallbackState
+  state = {
+    orders: fallbackState.orders.map((order) => ({ ...order })),
+    lastCallNumber: fallbackState.lastCallNumber,
+  }
   persistState(state)
 }
 
@@ -298,7 +360,18 @@ export function getMockOrders() {
 export function seedMockOrders(orders: StoredOrder[]) {
   updateState((draft) => {
     draft.orders = orders.map((order) => ({ ...order }))
+    draft.lastCallNumber = Math.max(
+      draft.lastCallNumber,
+      ...draft.orders.map((order) => order.callNumber ?? 0),
+    )
   })
 }
 
 export const mockMenu = MENU_ITEM_LIST
+
+export function subscribeNewOrdersMock(onAdded: (order: OrderDetail) => void) {
+  newOrderListeners.add(onAdded)
+  return () => {
+    newOrderListeners.delete(onAdded)
+  }
+}

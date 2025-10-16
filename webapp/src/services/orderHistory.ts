@@ -18,7 +18,15 @@ const readHistory = (): OrderHistoryEntry[] => {
     if (!raw) return []
     const parsed = JSON.parse(raw) as OrderHistoryEntry[]
     if (!Array.isArray(parsed)) return []
-    return parsed.filter((entry) => entry && typeof entry === 'object' && 'orderId' in entry && 'ticket' in entry)
+    return parsed
+      .filter((entry) => entry && typeof entry === 'object' && 'orderId' in entry && 'ticket' in entry)
+      .map((entry) => ({
+        ...entry,
+        callNumber:
+          typeof entry.callNumber === 'number' && Number.isFinite(entry.callNumber)
+            ? entry.callNumber
+            : 0,
+      }))
   } catch (error) {
     console.warn('Failed to parse order history from storage', error)
     return []
@@ -44,6 +52,10 @@ export const addOrderHistory = (summary: OrderSummary): OrderHistoryEntry[] => {
   const history = readHistory()
   const entry: OrderHistoryEntry = {
     ...summary,
+    callNumber:
+      typeof summary.callNumber === 'number' && Number.isFinite(summary.callNumber)
+        ? summary.callNumber
+        : 0,
     savedAt: new Date().toISOString(),
   }
 

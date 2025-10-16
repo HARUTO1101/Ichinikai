@@ -3,6 +3,8 @@ import {
   exportOrdersCsvFirebase,
   fetchOrderByTicketFirebase,
   fetchOrderDetailFirebase,
+  fetchKitchenOrdersFirebase,
+  subscribeNewOrdersFirebase,
   searchOrderByTicketOrIdFirebase,
   updateOrderStatusFirebase,
 } from './orders/firebase'
@@ -11,6 +13,8 @@ import {
   exportOrdersCsvMock,
   fetchOrderByTicketMock,
   fetchOrderDetailMock,
+  fetchKitchenOrdersMock,
+  subscribeNewOrdersMock,
   getMockOrders,
   resetMockData,
   searchOrderByTicketOrIdMock,
@@ -47,6 +51,12 @@ const searchOrderByTicketOrIdImpl = useMock
   ? searchOrderByTicketOrIdMock
   : searchOrderByTicketOrIdFirebase
 const exportOrdersCsvImpl = useMock ? exportOrdersCsvMock : exportOrdersCsvFirebase
+const fetchKitchenOrdersImpl = useMock
+  ? fetchKitchenOrdersMock
+  : fetchKitchenOrdersFirebase
+const subscribeNewOrdersImpl = useMock
+  ? subscribeNewOrdersMock
+  : subscribeNewOrdersFirebase
 
 export const isMockDataEnabled = useMock
 
@@ -69,3 +79,7 @@ export const updateOrderStatus = updateOrderStatusImpl
 export const searchOrderByTicketOrId = searchOrderByTicketOrIdImpl
 
 export const exportOrdersCsv = exportOrdersCsvImpl
+
+export const fetchKitchenOrders = fetchKitchenOrdersImpl
+
+export const subscribeNewOrders = subscribeNewOrdersImpl

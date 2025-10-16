@@ -24,7 +24,7 @@ const menuItems = [
   },
   {
     id: 'production',
-    label: '制作フロー',
+    label: '盛り付け',
     path: '/admin/production',
     icon: '🥞',
   },

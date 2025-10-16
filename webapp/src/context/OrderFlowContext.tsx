@@ -11,7 +11,13 @@ import {
 import QRCode from 'qrcode'
 import { createOrder, fetchOrderByTicket, fetchOrderDetail } from '../services/orders'
 import { addOrderHistory } from '../services/orderHistory'
-import { MENU_ITEM_LIST, type MenuItem, type MenuItemKey, type OrderSummary } from '../types/order'
+import {
+  MENU_ITEM_LIST,
+  type MenuItem,
+  type MenuItemKey,
+  type OrderLookupResult,
+  type OrderSummary,
+} from '../types/order'
 import { buildTicketUrl, extractTicketFromInput } from '../utils/ticket'
 
 interface CartItemView {
@@ -23,7 +29,21 @@ interface CartItemView {
 interface OrderResultPayload {
   summary: OrderSummary
   qrCode: string
+  progressUrl: string
 }
+
+const ensureCallNumber = (value: number | undefined): number =>
+  Number.isInteger(value) && value !== null && value !== undefined && value > 0 ? value : 0
+
+const createSummaryFromDetail = (detail: OrderLookupResult | OrderSummary): OrderSummary => ({
+  orderId: detail.orderId,
+  ticket: detail.ticket,
+  callNumber: ensureCallNumber(detail.callNumber),
+  total: detail.total,
+  items: detail.items,
+  payment: detail.payment,
+  progress: detail.progress,
+})
 
 interface OrderFlowContextValue {
   items: Record<MenuItemKey, number>
@@ -89,9 +109,9 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
   const hasItems = cartItems.length > 0
 
   const buildOrderResultPayload = useCallback(async (summary: OrderSummary) => {
-    const ticketUrl = buildTicketUrl(summary.ticket)
-    const qrCode = await QRCode.toDataURL(ticketUrl, { width: 256, margin: 1 })
-    return { summary, qrCode }
+    const progressUrl = buildTicketUrl(summary.ticket)
+    const qrCode = await QRCode.toDataURL(progressUrl, { width: 256, margin: 1 })
+    return { summary, qrCode, progressUrl }
   }, [])
 
   const confirmOrder = useCallback(async () => {
@@ -107,7 +127,7 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
     setOrderResult(null)
 
     try {
-      const summary = await createOrder(items)
+  const summary = createSummaryFromDetail(await createOrder(items))
       const payload = await buildOrderResultPayload(summary)
       setOrderResult(payload)
       try {
@@ -144,14 +164,7 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
         return null
       }
 
-      const nextSummary: OrderSummary = {
-        orderId: detail.orderId,
-        ticket: detail.ticket,
-        total: detail.total,
-        items: detail.items,
-        payment: detail.payment,
-        progress: detail.progress,
-      }
+      const nextSummary = createSummaryFromDetail(detail)
 
       setOrderResult((prev) => (prev ? { ...prev, summary: nextSummary } : prev))
       return nextSummary
@@ -173,14 +186,7 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
           return null
         }
 
-        const summary: OrderSummary = {
-          orderId: detail.orderId,
-          ticket: detail.ticket,
-          total: detail.total,
-          items: detail.items,
-          payment: detail.payment,
-          progress: detail.progress,
-        }
+        const summary = createSummaryFromDetail(detail)
 
         const payload = await buildOrderResultPayload(summary)
         setOrderResult(payload)
