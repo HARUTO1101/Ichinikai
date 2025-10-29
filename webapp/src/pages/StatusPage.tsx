@@ -1,52 +1,8 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { QrScanner } from '../components/QrScanner'
-import { clearOrderHistory, type OrderHistoryEntry } from '../services/orderHistory'
+import { clearOrderHistory } from '../services/orderHistory'
 import { useOrderHistory } from '../hooks/useOrderHistory'
-import { extractTicketFromInput } from '../utils/ticket'
 
 export function StatusPage() {
-  const navigate = useNavigate()
-  const [progressCode, setProgressCode] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [scannerActive, setScannerActive] = useState(false)
   const orderHistory = useOrderHistory()
-
-  const redirectToTicket = (input: string) => {
-    const normalized = extractTicketFromInput(input)
-    setError(null)
-
-    if (!normalized) {
-      setError('進捗確認コードを入力してください。')
-      return
-    }
-
-    setProgressCode(normalized)
-    navigate(`/order/complete/${normalized}`)
-  }
-
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    redirectToTicket(progressCode)
-  }
-
-  const handleScannerResult = (value: string) => {
-    const normalized = extractTicketFromInput(value)
-    if (!normalized) {
-      setError('有効な進捗確認コードを読み取れませんでした。')
-      setScannerActive(false)
-      return
-    }
-    setProgressCode(normalized)
-    setScannerActive(false)
-    navigate(`/order/complete/${normalized}`)
-  }
-
-  const handleHistorySelect = (entry: OrderHistoryEntry) => {
-    setProgressCode(entry.ticket)
-    setScannerActive(false)
-    navigate(`/order/complete/${entry.ticket}`)
-  }
 
   const handleClearHistory = () => {
     if (typeof window === 'undefined' || window.confirm('この端末に保存されている注文履歴をすべて削除しますか？')) {
@@ -57,53 +13,13 @@ export function StatusPage() {
   return (
     <div className="content-container">
       <section className="content-card">
-        <h1 className="section-title">注文の進捗を確認する</h1>
+        <h1 className="section-title">注文状況の確認について</h1>
         <p className="section-description">
-          進捗確認コード（QRコードまたはリンクに記載）を入力するか、QRコードを読み取って進捗を確認できます。
+          お客様には呼出番号のみをお伝えしています。スタッフからの案内があるまで、注文完了画面に表示された呼出番号をお控えください。
         </p>
-
-        <form className="form-grid" onSubmit={handleSubmit}>
-          <div className="field">
-            <label htmlFor="ticket">進捗確認コード</label>
-            <input
-              id="ticket"
-              type="text"
-              inputMode="text"
-              value={progressCode}
-              onChange={(event) => setProgressCode(event.target.value.toUpperCase())}
-              placeholder="例: AB12CD34EF56GH78"
-              maxLength={20}
-            />
-          </div>
-
-          <div className="button-row">
-            <button type="submit" className="button primary">
-              進捗を確認
-            </button>
-            <button
-              type="button"
-              className="button secondary"
-              onClick={() => setScannerActive((prev) => !prev)}
-            >
-              {scannerActive ? 'カメラを閉じる' : 'QRコードを読み取る'}
-            </button>
-          </div>
-        </form>
-
-        {scannerActive && (
-          <div className="content-card" style={{ marginTop: '1rem' }}>
-            <QrScanner
-              active={scannerActive}
-              onResult={handleScannerResult}
-              onError={(message) => setError(message)}
-            />
-            <p style={{ color: '#475569', marginTop: '0.75rem', fontSize: '0.9rem' }}>
-              読み取りが完了したら自動的に停止します。明るい場所でご利用ください。
-            </p>
-          </div>
-        )}
-
-        {error && <p style={{ color: '#dc2626', marginTop: '1rem' }}>{error}</p>}
+        <p className="section-description">
+          進捗の詳細確認や調整はスタッフが内部ツールで対応します。状況に変化があった場合は店頭でお知らせいたします。
+        </p>
       </section>
 
       {orderHistory.length > 0 && (
@@ -115,31 +31,25 @@ export function StatusPage() {
             </button>
           </div>
           <p className="history-description">
-            直近にこの端末から確定した注文を表示しています。タップすると進捗確認コードを使って進捗を再検索できます。
+            直近にこの端末から確定した注文を表示しています。呼出番号と注文番号を控えておくと店頭での確認がスムーズです。
           </p>
           <ul className="order-history-list">
             {orderHistory.map((entry) => (
-              <li key={entry.orderId}>
-                <button
-                  type="button"
-                  className="order-history-item"
-                  onClick={() => handleHistorySelect(entry)}
-                >
-                  <div className="order-history-row">
-                    <span className="order-history-ticket" aria-label="進捗確認コード">
-                      {entry.ticket}
-                    </span>
-                    <span className="order-history-date">
-                      {new Date(entry.savedAt).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="order-history-row meta">
-                    <span>
-                      呼出番号: {entry.callNumber > 0 ? entry.callNumber : '準備中 / 未設定'}
-                    </span>
-                    <span>合計: ¥{entry.total.toLocaleString()}</span>
-                  </div>
-                </button>
+              <li key={entry.orderId} className="order-history-item" aria-live="polite">
+                <div className="order-history-row">
+                  <span className="order-history-date">
+                    {new Date(entry.savedAt).toLocaleString()}
+                  </span>
+                </div>
+                <div className="order-history-row meta">
+                  <span>
+                    呼出番号: {entry.callNumber > 0 ? entry.callNumber : '準備中 / 未設定'}
+                  </span>
+                  <span>注文番号: {entry.orderId}</span>
+                </div>
+                <div className="order-history-row meta">
+                  <span>合計: ¥{entry.total.toLocaleString()}</span>
+                </div>
               </li>
             ))}
           </ul>

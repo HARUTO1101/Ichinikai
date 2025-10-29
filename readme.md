@@ -99,15 +99,21 @@ service cloud.firestore {
 
     match /orderLookup/{ticket} {
       allow read: if true;
-      allow write: if request.auth.token.admin == true;
+      allow create: if request.auth != null;
+      allow update: if request.auth.token.admin == true || request.auth.token.staff == true;
+      allow delete: if request.auth.token.admin == true;
     }
 
     match /orders/{orderId} {
       allow create: if request.auth != null;
-      allow update: if request.auth.token.admin == true
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['payment','progress','updatedAt']);
-      allow get, list: if false;
+      allow update: if request.auth.token.admin == true || request.auth.token.staff == true;
+      allow read: if false;
       allow delete: if request.auth.token.admin == true;
+    }
+
+    match /metadata/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && docId == 'counters';
     }
   }
 }

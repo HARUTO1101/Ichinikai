@@ -1,6 +1,4 @@
 import {
-  MENU_ITEMS,
-  MENU_ITEM_LIST,
   type MenuItemKey,
   type OrderDetail,
   type OrderLookupResult,
@@ -8,7 +6,10 @@ import {
   type PaymentStatus,
   type ProgressStatus,
   type KitchenOrdersQuery,
+  type PlatingProgress,
 } from '../../types/order'
+import { getMenuSnapshot } from '../../store/menuConfigStore'
+import { createInitialPlatingProgress, ensurePlatingProgress } from '../../utils/plating'
 
 interface StoredOrder extends OrderDetail {
   createdAt?: Date
@@ -23,6 +24,8 @@ interface MockState {
 const STORAGE_KEY = 'mock-orders-state-v1'
 
 const newOrderListeners = new Set<(order: OrderDetail) => void>()
+const orderCollectionListeners = new Set<(orders: OrderDetail[]) => void>()
+const orderLookupListeners = new Map<string, Set<(order: OrderLookupResult | null) => void>>()
 
 function emitNewOrder(order: StoredOrder) {
   newOrderListeners.forEach((listener) => {
@@ -32,6 +35,54 @@ function emitNewOrder(order: StoredOrder) {
       console.error('モック新規注文通知でエラーが発生しました', error)
     }
   })
+}
+
+function emitOrderCollection() {
+  const snapshot = state.orders.map((order) => ({ ...order }))
+  orderCollectionListeners.forEach((listener) => {
+    try {
+      listener(snapshot)
+    } catch (error) {
+      console.error('モック注文購読の通知でエラーが発生しました', error)
+    }
+  })
+}
+
+function toOrderLookupResult(order: StoredOrder): OrderLookupResult {
+  return {
+    orderId: order.orderId,
+    ticket: order.ticket,
+    callNumber: order.callNumber ?? 0,
+    items: { ...order.items },
+    total: order.total,
+    payment: order.payment,
+    progress: order.progress,
+    plating: ensurePlatingProgress(order.items, order.plating),
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+  }
+}
+
+function emitOrderLookup(ticket: string) {
+  const trimmed = ticket.trim().toUpperCase()
+  if (!trimmed) return
+  const listeners = orderLookupListeners.get(trimmed)
+  if (!listeners || listeners.size === 0) return
+
+  const order = findOrderByTicket(trimmed)
+  const payload = order ? toOrderLookupResult(order) : null
+
+  listeners.forEach((listener) => {
+    try {
+      listener(payload)
+    } catch (error) {
+      console.error('モック注文詳細購読の通知でエラーが発生しました', error)
+    }
+  })
+}
+
+function emitAllOrderLookupListeners() {
+  Array.from(orderLookupListeners.keys()).forEach((ticket) => emitOrderLookup(ticket))
 }
 
 function reviveState(raw: unknown): MockState {
@@ -100,9 +151,11 @@ function sanitizeItems(rawItems: Partial<Record<MenuItemKey, number>>) {
 }
 
 function calculateTotal(items: Record<MenuItemKey, number>) {
+  const { map: menuMap } = getMenuSnapshot()
   return Object.entries(items).reduce((sum, [key, quantity]) => {
-    const menu = MENU_ITEMS[key as MenuItemKey]
-    return sum + menu.price * quantity
+    const menu = menuMap[key as MenuItemKey]
+    const price = menu?.price ?? 0
+    return sum + price * quantity
   }, 0)
 }
 
@@ -140,6 +193,7 @@ const fallbackState: MockState = {
       total: calculateTotal(fallbackOrderItems),
       payment: '未払い',
       progress: '受注済み',
+      plating: createInitialPlatingProgress(fallbackOrderItems),
       createdAt: new Date(),
       updatedAt: new Date(),
       createdBy: 'mock-user',
@@ -158,6 +212,8 @@ function updateState(mutator: (draft: MockState) => void) {
   mutator(draft)
   state = draft
   persistState(state)
+  emitOrderCollection()
+  emitAllOrderLookupListeners()
 }
 
 function findOrderByTicket(ticket: string) {
@@ -192,6 +248,7 @@ export async function createOrderMock(
     total,
     payment,
     progress,
+    plating: createInitialPlatingProgress(items),
     createdAt: now,
     updatedAt: now,
     createdBy: 'mock-user',
@@ -203,6 +260,7 @@ export async function createOrderMock(
   })
 
   emitNewOrder(order)
+  emitOrderLookup(order.ticket)
 
   return {
     orderId,
@@ -212,6 +270,8 @@ export async function createOrderMock(
     items,
     payment,
     progress,
+    plating: order.plating,
+    createdAt: now,
   }
 }
 
@@ -228,7 +288,9 @@ export async function fetchOrderByTicketMock(
     total: order.total,
     payment: order.payment,
     progress: order.progress,
+    plating: ensurePlatingProgress(order.items, order.plating),
     updatedAt: order.updatedAt,
+    createdAt: order.createdAt,
   }
 }
 
@@ -252,6 +314,32 @@ export async function updateOrderStatusMock(
         ...order,
         payment: updates.payment,
         progress: updates.progress,
+        updatedAt: new Date(),
+      }
+    })
+  })
+}
+
+export async function updateOrderPlatingMock(
+  orderId: string,
+  ticket: string,
+  updates: Partial<PlatingProgress>,
+) {
+  const entries = Object.entries(updates).filter(([, value]) => typeof value === 'boolean')
+  if (entries.length === 0) return
+
+  updateState((draft) => {
+    draft.orders = draft.orders.map((order) => {
+      if (order.orderId !== orderId && order.ticket !== ticket) return order
+
+      const merged = ensurePlatingProgress(order.items, {
+        ...order.plating,
+        ...(Object.fromEntries(entries) as Partial<PlatingProgress>),
+      })
+
+      return {
+        ...order,
+        plating: merged,
         updatedAt: new Date(),
       }
     })
@@ -310,9 +398,14 @@ export async function exportOrdersCsvMock() {
     'updatedAt',
   ]
 
+  const { map: menuMap } = getMenuSnapshot()
   const csvRows = state.orders.map((order) => {
     const itemSummary = Object.entries(order.items)
-      .map(([key, quantity]) => `${MENU_ITEMS[key as MenuItemKey].label}:${quantity}`)
+      .map(([key, quantity]) => {
+        const menu = menuMap[key as MenuItemKey]
+        const label = menu?.label ?? key
+        return `${label}:${quantity}`
+      })
       .join(' | ')
 
     return [
@@ -351,6 +444,7 @@ export function resetMockData() {
     lastCallNumber: fallbackState.lastCallNumber,
   }
   persistState(state)
+  emitOrderCollection()
 }
 
 export function getMockOrders() {
@@ -367,11 +461,49 @@ export function seedMockOrders(orders: StoredOrder[]) {
   })
 }
 
-export const mockMenu = MENU_ITEM_LIST
+export const mockMenu = () => getMenuSnapshot().list
 
 export function subscribeNewOrdersMock(onAdded: (order: OrderDetail) => void) {
   newOrderListeners.add(onAdded)
   return () => {
     newOrderListeners.delete(onAdded)
+  }
+}
+
+export function subscribeOrdersMock(onChange: (orders: OrderDetail[]) => void) {
+  orderCollectionListeners.add(onChange)
+  onChange(state.orders.map((order) => ({ ...order })))
+  return () => {
+    orderCollectionListeners.delete(onChange)
+  }
+}
+
+export function subscribeOrderLookupMock(
+  ticket: string,
+  onChange: (order: OrderLookupResult | null) => void,
+) {
+  const trimmed = ticket.trim().toUpperCase()
+  if (!trimmed) {
+    onChange(null)
+    return () => {}
+  }
+
+  const listeners = orderLookupListeners.get(trimmed) ?? new Set()
+  if (!orderLookupListeners.has(trimmed)) {
+    orderLookupListeners.set(trimmed, listeners)
+  }
+
+  listeners.add(onChange)
+
+  const order = findOrderByTicket(trimmed)
+  onChange(order ? toOrderLookupResult(order) : null)
+
+  return () => {
+    const existing = orderLookupListeners.get(trimmed)
+    if (!existing) return
+    existing.delete(onChange)
+    if (existing.size === 0) {
+      orderLookupListeners.delete(trimmed)
+    }
   }
 }

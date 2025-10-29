@@ -20,13 +20,22 @@ const readHistory = (): OrderHistoryEntry[] => {
     if (!Array.isArray(parsed)) return []
     return parsed
       .filter((entry) => entry && typeof entry === 'object' && 'orderId' in entry && 'ticket' in entry)
-      .map((entry) => ({
-        ...entry,
-        callNumber:
-          typeof entry.callNumber === 'number' && Number.isFinite(entry.callNumber)
-            ? entry.callNumber
-            : 0,
-      }))
+      .map((entry) => {
+        const createdAtRaw =
+          typeof entry.createdAt === 'string' || entry.createdAt instanceof Date
+            ? new Date(entry.createdAt)
+            : undefined
+        const createdAt = createdAtRaw && !Number.isNaN(createdAtRaw.getTime()) ? createdAtRaw : undefined
+
+        return {
+          ...entry,
+          callNumber:
+            typeof entry.callNumber === 'number' && Number.isFinite(entry.callNumber)
+              ? entry.callNumber
+              : 0,
+          createdAt,
+        }
+      })
   } catch (error) {
     console.warn('Failed to parse order history from storage', error)
     return []

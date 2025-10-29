@@ -10,6 +10,7 @@ import { OrderProgressPage } from './pages/OrderProgressPage'
 import { TicketNotFoundPage } from './pages/TicketNotFoundPage'
 import { KitchenDashboardPage } from './pages/KitchenDashboardPage'
 import { OrderToastViewport } from './components/OrderToastViewport'
+import { RoleGuard } from './components/auth/RoleGuard'
 import './App.css'
 
 const navItems = [
@@ -20,7 +21,6 @@ const navItems = [
 const actionItems = (
   [
     { to: '/order', label: '注文する', variant: 'primary' },
-    { to: '/progress', label: '進捗を表示', variant: 'secondary' },
   ] as const
 )
 
@@ -36,6 +36,8 @@ function NotFound() {
 function App() {
   const location = useLocation()
   const isAdminRoute = location.pathname.startsWith('/admin')
+  const isKitchenRoute = location.pathname.startsWith('/kitchen')
+  const shouldShowToasts = isAdminRoute || isKitchenRoute
   const shellClassName = ['app-shell', isAdminRoute ? 'app-shell--wide' : '']
     .filter(Boolean)
     .join(' ')
@@ -107,8 +109,30 @@ function App() {
               <Route path="/status" element={<StatusPage />} />
               <Route path="/progress" element={<OrderProgressPage />} />
               <Route path="/progress/:ticket" element={<OrderProgressPage />} />
-              <Route path="/kitchen" element={<KitchenDashboardPage />} />
-              <Route path="/admin/*" element={<AdminPage />} />
+              <Route
+                path="/kitchen"
+                element={
+                  <RoleGuard
+                    required="kitchen"
+                    title="キッチン専用ページ"
+                    description="調理チームメンバーのアカウントでサインインしてください。"
+                  >
+                    <KitchenDashboardPage />
+                  </RoleGuard>
+                }
+              />
+              <Route
+                path="/admin/*"
+                element={
+                  <RoleGuard
+                    required={["admin", "staff"]}
+                    title="管理画面へのアクセス"
+                    description="管理者またはスタッフ権限を持つアカウントでサインインしてください。"
+                  >
+                    <AdminPage />
+                  </RoleGuard>
+                }
+              />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
@@ -119,7 +143,9 @@ function App() {
             </p>
           </footer>
         </div>
-        <OrderToastViewport variant={toastVariant} ariaLabel="新着通知" />
+        {shouldShowToasts && (
+          <OrderToastViewport variant={toastVariant} ariaLabel="新着通知" />
+        )}
       </OrderFlowProvider>
     </OrderToastProvider>
   )

@@ -73,6 +73,12 @@ export const db: Firestore = dbInstance
 export async function ensureAnonymousUser() {
   if (useMockData) return
   if (!auth.currentUser) {
-    await signInAnonymously(auth)
+    const credential = await signInAnonymously(auth)
+    await credential.user.getIdToken(true)
+    return
+  }
+
+  if (auth.currentUser.isAnonymous) {
+    await auth.currentUser.getIdToken(true)
   }
 }

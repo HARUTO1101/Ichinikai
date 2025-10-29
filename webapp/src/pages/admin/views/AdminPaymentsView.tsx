@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserQRCodeReader } from '@zxing/browser'
 import { NotFoundException } from '@zxing/library'
-import { getInitialOrders, type OrderPayment, type OrderRow } from './adminOrdersData'
+import { useOrdersSubscription } from '../../../hooks/useOrdersSubscription'
+import { updateOrderStatus } from '../../../services/orders'
+import { type PaymentStatus } from '../../../types/order'
+import { getOrderConfirmationCode, mapOrderDetailToRow, type OrderRow } from './adminOrdersData'
+import { buildOrderItemEntries, OrderItemsInline } from './adminOrderItems'
+import {
+  getVoucherUsageForOrder,
+  recordVoucherUsage,
+  removeVoucherUsage,
+  VOUCHER_FACE_VALUE,
+} from './cashAuditStorage'
 
 type ReaderControls = Awaited<ReturnType<BrowserQRCodeReader['decodeFromVideoDevice']>>
 
@@ -9,36 +19,45 @@ function formatCurrency(value: number) {
   return `¥${value.toLocaleString()}`
 }
 
-const paymentStatusHistoryText: Record<OrderPayment, string> = {
+const paymentStatusHistoryText: Record<PaymentStatus, string> = {
   未払い: '未払いに戻しました',
   支払い済み: '支払い済みに更新',
   キャンセル: '注文をキャンセルしました',
 }
 
-const paymentStatusChipTone: Record<OrderPayment, 'warning' | 'success' | 'neutral'> = {
+const paymentStatusChipTone: Record<PaymentStatus, 'warning' | 'success' | 'neutral'> = {
   未払い: 'warning',
   支払い済み: 'success',
   キャンセル: 'neutral',
 }
 
 export function AdminPaymentsView() {
-  const [orders, setOrders] = useState<OrderRow[]>(getInitialOrders())
+  const { orders: rawOrders, loading, error } = useOrdersSubscription()
+  const orders = useMemo(() => rawOrders.map(mapOrderDetailToRow), [rawOrders])
   const [keyword, setKeyword] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [scannerOpen, setScannerOpen] = useState(false)
   const [isScanning, setIsScanning] = useState(false)
   const [scanMessage, setScanMessage] = useState<string | null>(null)
   const [scanError, setScanError] = useState<string | null>(null)
-  const [historyLog, setHistoryLog] = useState<Record<string, Array<{ status: OrderPayment; time: string }>>>({})
+  const [historyLog, setHistoryLog] = useState<Record<string, Array<{ status: PaymentStatus; time: string }>>>({})
+  const [mutatingId, setMutatingId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [voucherCount, setVoucherCount] = useState(0)
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const controlsRef = useRef<ReaderControls | null>(null)
+  const queueItemRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
   const unpaidOrders = useMemo(
     () =>
       orders
         .filter((order) => order.payment === '未払い')
-        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1)),
+        .sort((a, b) => {
+          const aTime = a.createdAtDate?.getTime() ?? 0
+          const bTime = b.createdAtDate?.getTime() ?? 0
+          return aTime - bTime
+        }),
     [orders],
   )
 
@@ -46,7 +65,9 @@ export function AdminPaymentsView() {
     if (!keyword.trim()) return unpaidOrders
     const lower = keyword.trim().toLowerCase()
     return unpaidOrders.filter((order) =>
-      `${order.ticket} ${order.id} ${order.callNumber} ${order.items}`.toLowerCase().includes(lower),
+      `${order.ticket} ${order.id} ${order.callNumber} ${order.items} ${getOrderConfirmationCode(order.id)}`
+        .toLowerCase()
+        .includes(lower),
     )
   }, [keyword, unpaidOrders])
 
@@ -61,10 +82,16 @@ export function AdminPaymentsView() {
     return [...entries].reverse()
   }, [historyLog, selectedId])
 
-  const selectedOrderItems = useMemo(() => {
-    if (!selectedOrder) return []
-    return selectedOrder.items.split('／').map((item) => item.trim()).filter(Boolean)
-  }, [selectedOrder])
+  const selectedOrderEntries = useMemo(
+    () => (selectedOrder ? buildOrderItemEntries(selectedOrder) : []),
+    [selectedOrder],
+  )
+
+
+  const selectedOrderConfirmationCode = useMemo(
+    () => (selectedOrder ? getOrderConfirmationCode(selectedOrder.id) : '----'),
+    [selectedOrder],
+  )
 
   useEffect(() => {
     if (!selectedOrder && filteredQueue.length > 0) {
@@ -72,11 +99,58 @@ export function AdminPaymentsView() {
     }
   }, [filteredQueue, selectedOrder])
 
+  useEffect(() => {
+    if (!selectedOrder) return
+    const element = queueItemRefs.current[selectedOrder.id]
+    if (!element) return
+    element.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [selectedOrder])
+
+  const maxVoucherCount = useMemo(
+    () => (selectedOrder ? Math.floor(selectedOrder.total / VOUCHER_FACE_VALUE) : 0),
+    [selectedOrder],
+  )
+
+  useEffect(() => {
+    if (!selectedOrder) {
+      setVoucherCount(0)
+      return
+    }
+    const recordedUsage = getVoucherUsageForOrder(selectedOrder.id)
+    const clamped = Math.min(Math.max(0, recordedUsage), maxVoucherCount)
+    setVoucherCount(clamped)
+  }, [selectedOrder, maxVoucherCount])
+
+  const voucherAmount = useMemo(
+    () => voucherCount * VOUCHER_FACE_VALUE,
+    [voucherCount],
+  )
+
+  const cashDue = useMemo(
+    () => (selectedOrder ? Math.max(selectedOrder.total - voucherAmount, 0) : 0),
+    [selectedOrder, voucherAmount],
+  )
+
+  const adjustVoucherCount = useCallback(
+    (delta: number) => {
+      setVoucherCount((previous) => {
+        const next = previous + delta
+        const clamped = Math.min(Math.max(0, next), maxVoucherCount)
+        return clamped
+      })
+    },
+    [maxVoucherCount],
+  )
+
   const recentSettled = useMemo(
     () =>
       orders
         .filter((order) => order.payment === '支払い済み')
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+        .sort((a, b) => {
+          const aTime = a.createdAtDate?.getTime() ?? 0
+          const bTime = b.createdAtDate?.getTime() ?? 0
+          return bTime - aTime
+        })
         .slice(0, 6),
     [orders],
   )
@@ -87,7 +161,7 @@ export function AdminPaymentsView() {
       totalDue: unpaidOrders.reduce((sum, order) => sum + order.total, 0),
       settledToday: recentSettled.length,
     }),
-    [unpaidOrders, recentSettled.length],
+    [unpaidOrders, recentSettled],
   )
 
   const selectOrder = useCallback(
@@ -100,59 +174,92 @@ export function AdminPaymentsView() {
     [setKeyword, setSelectedId],
   )
 
-  const appendHistory = useCallback((id: string, status: OrderPayment) => {
+  const appendHistory = useCallback((id: string, status: PaymentStatus) => {
     setHistoryLog((prev) => {
       const nextEntries = [...(prev[id] ?? []), { status, time: new Date().toISOString() }]
       return { ...prev, [id]: nextEntries }
     })
   }, [])
 
-  const updateOrderStatus = useCallback(
-    (id: string, status: OrderPayment) => {
-      setOrders((prev) =>
-        prev.map((order) => (order.id === id ? { ...order, payment: status } : order)),
-      )
-      appendHistory(id, status)
+  const mutatePaymentStatus = useCallback(
+    async (order: OrderRow, status: PaymentStatus) => {
+      setMutatingId(order.id)
+      setActionError(null)
+      try {
+        await updateOrderStatus(order.id, order.ticket, {
+          payment: status,
+          progress: order.progress,
+        })
+        appendHistory(order.id, status)
+      } catch (err) {
+        console.error('支払いステータスを更新できませんでした', err)
+        setActionError('支払いステータスの更新に失敗しました。通信環境をご確認ください。')
+        throw err
+      } finally {
+        setMutatingId(null)
+      }
     },
     [appendHistory],
   )
 
   const markPaid = useCallback(
-    (id: string) => {
-      updateOrderStatus(id, '支払い済み')
-      if (selectedId === id) {
-        setScanMessage('支払い済みにしました。')
-        setSelectedId(null)
+    async (order: OrderRow) => {
+      try {
+        await mutatePaymentStatus(order, '支払い済み')
+        const appliedVoucherCount =
+          selectedOrder?.id === order.id ? voucherCount : getVoucherUsageForOrder(order.id)
+        const maxForOrder = Math.max(0, Math.floor(order.total / VOUCHER_FACE_VALUE))
+        const normalizedVoucherCount = Math.min(Math.max(0, appliedVoucherCount), maxForOrder)
+        recordVoucherUsage(order.id, normalizedVoucherCount)
+        if (selectedId === order.id) {
+          setScanMessage('支払い済みにしました。')
+          setSelectedId(null)
+        }
+      } catch {
+        // already handled in mutatePaymentStatus
       }
     },
-    [selectedId, updateOrderStatus],
+    [mutatePaymentStatus, selectedId, selectedOrder?.id, voucherCount],
   )
 
   const cancelOrder = useCallback(
-    (id: string) => {
-      const targetOrder = orders.find((order) => order.id === id)
-      const label = targetOrder ? `呼出番号 ${targetOrder.callNumber}` : '対象の注文'
+    async (order: OrderRow) => {
+      const label = `呼出番号 ${order.callNumber}`
       const confirmed = window.confirm(
         `${label} をキャンセルしますか？\nキャンセルすると未払い一覧から除外されます。（あとで未払いに戻せます）`,
       )
       if (!confirmed) return
 
-      updateOrderStatus(id, 'キャンセル')
-      if (selectedId === id) {
-        setScanMessage('注文をキャンセルしました。')
-        setSelectedId(null)
+      try {
+        await mutatePaymentStatus(order, 'キャンセル')
+        removeVoucherUsage(order.id)
+        if (selectedId === order.id) {
+          setVoucherCount(0)
+          setScanMessage('注文をキャンセルしました。')
+          setSelectedId(null)
+        }
+      } catch {
+        // handled above
       }
     },
-    [orders, selectedId, updateOrderStatus],
+    [mutatePaymentStatus, selectedId],
   )
 
   const revertPayment = useCallback(
-    (id: string) => {
-      updateOrderStatus(id, '未払い')
-      setSelectedId(id)
-      setScanMessage('支払いステータスを未払いに戻しました。')
+    async (order: OrderRow) => {
+      try {
+        await mutatePaymentStatus(order, '未払い')
+        removeVoucherUsage(order.id)
+        if (selectedId === order.id) {
+          setVoucherCount(0)
+        }
+        setSelectedId(order.id)
+        setScanMessage('支払いステータスを未払いに戻しました。')
+      } catch {
+        // handled above
+      }
     },
-    [updateOrderStatus],
+    [mutatePaymentStatus, selectedId],
   )
 
   const stopScanner = useCallback(() => {
@@ -180,6 +287,11 @@ export function AdminPaymentsView() {
       const ticketMatch = normalized.match(/t[-_ ]?(\w{3,})/)
       const idMatch = normalized.match(/#(\d{3,})/)
       const callNumberMatch = normalized.match(/(?:no\.?|call|呼出|#)?\s*(\d{1,4})$/)
+
+      const confirmationMatch = orders.find(
+        (order) => getOrderConfirmationCode(order.id).toLowerCase() === normalized,
+      )
+      if (confirmationMatch) return confirmationMatch
 
       const ticketCandidate = ticketMatch ? `T-${ticketMatch[1]}` : null
       const idCandidate = idMatch ? `#${idMatch[1]}` : null
@@ -214,18 +326,20 @@ export function AdminPaymentsView() {
 
   const handleSuccessfulRead = useCallback(
     (text: string) => {
-    const order = locateOrderFromCode(text)
-    if (order) {
-      selectOrder(order)
-  setScanMessage(`進捗確認コード ${order.ticket} を読み取り、呼出番号 ${order.callNumber} を選択しました。`)
-      setScanError(null)
-      setScannerOpen(false)
-    } else {
-      setScanMessage(`QR内の「${text}」に対応する注文は見つかりませんでした。`)
-      setScanError('別のコードを読み取るか手入力を試してください。')
+      const order = locateOrderFromCode(text)
+      if (order) {
+        selectOrder(order)
+        setScanMessage(
+          `進捗確認コード ${order.ticket} を読み取り、呼出番号 ${order.callNumber}（確認コード ${getOrderConfirmationCode(order.id)}）を選択しました。`,
+        )
+        setScanError(null)
+        setScannerOpen(false)
+      } else {
+        setScanMessage(`QR内の「${text}」に対応する注文は見つかりませんでした。`)
+        setScanError('別のコードを読み取るか手入力を試してください。')
       }
     },
-    [locateOrderFromCode, selectOrder, setScanError, setScanMessage, setScannerOpen],
+    [locateOrderFromCode, selectOrder],
   )
 
   useEffect(() => {
@@ -298,6 +412,10 @@ export function AdminPaymentsView() {
     stopScanner()
   }, [stopScanner])
 
+  if (loading) {
+    return <p>注文データを読み込み中です…</p>
+  }
+
   return (
     <div className="admin-payment-page">
       {scannerOpen && (
@@ -344,6 +462,17 @@ export function AdminPaymentsView() {
         </div>
       </section>
 
+      {error && (
+        <p className="admin-error" role="alert">
+          注文データの取得に失敗しました。ページを再読み込みしてください。
+        </p>
+      )}
+      {actionError && (
+        <p className="admin-error" role="alert">
+          {actionError}
+        </p>
+      )}
+
       <div className="admin-payment-shell">
         <aside className="admin-payment-sidebar" aria-label="呼出番号一覧">
           <div className="admin-payment-sidebar-header">
@@ -353,7 +482,7 @@ export function AdminPaymentsView() {
               <input
                 id="payment-search"
                 type="search"
-                placeholder="呼出番号・確認コード・注文番号"
+                placeholder="呼出番号・確認コード（注文番号末尾）・注文番号"
                 value={keyword}
                 onChange={(event) => setKeyword(event.target.value)}
               />
@@ -373,28 +502,24 @@ export function AdminPaymentsView() {
           )}
 
           <div className="admin-payment-list">
-            {filteredQueue.map((order) => (
-              <button
-                key={order.id}
-                type="button"
-                className={`admin-payment-list-item${selectedOrder?.id === order.id ? ' active' : ''}`}
-                onClick={() => setSelectedId(order.id)}
-              >
-                <p className="admin-payment-ticket" aria-label={`呼出番号 ${order.callNumber}`}>
-                  {order.callNumber}
-                </p>
-                <div className="admin-payment-list-info">
-                  <p className="admin-payment-code">確認コード {order.ticket}</p>
-                  <p className="admin-payment-items">{order.items}</p>
-                </div>
-                <div className="admin-payment-list-meta">
-                  <span className="admin-payment-total">{formatCurrency(order.total)}</span>
-                  <time dateTime={order.createdAt} className="admin-payment-time">
-                    {order.createdAt}
-                  </time>
-                </div>
-              </button>
-            ))}
+            {filteredQueue.map((order) => {
+              return (
+                <button
+                  key={order.id}
+                  type="button"
+                  className={`admin-payment-list-item${selectedOrder?.id === order.id ? ' active' : ''}`}
+                  onClick={() => setSelectedId(order.id)}
+                  ref={(element) => {
+                    queueItemRefs.current[order.id] = element
+                  }}
+                  aria-pressed={selectedOrder?.id === order.id}
+                >
+                  <p className="admin-payment-ticket" aria-label={`呼出番号 ${order.callNumber}`}>
+                    {order.callNumber}
+                  </p>
+                </button>
+              )
+            })}
             {filteredQueue.length === 0 && (
               <p className="admin-payment-empty">未払いの注文はありません。</p>
             )}
@@ -412,26 +537,74 @@ export function AdminPaymentsView() {
                   >
                     {selectedOrder.callNumber}
                   </p>
-                  <p className="admin-payment-order">確認コード {selectedOrder.ticket}</p>
+                  <p className="admin-payment-order">確認コード {selectedOrderConfirmationCode}</p>
                   <p className="admin-payment-order subtle">注文番号 {selectedOrder.id}</p>
+                  <p className="admin-payment-order subtle">進捗コード {selectedOrder.ticket}</p>
                 </div>
                 <div className="admin-payment-total-box">
-                  <span>合計金額</span>
-                  <strong>{formatCurrency(selectedOrder.total)}</strong>
+                  <section className="admin-payment-breakdown-panel" aria-label="支払い内訳">
+                    <div className="admin-payment-breakdown-row prominent">
+                      <p className="admin-payment-breakdown-label">現金</p>
+                      <p className="admin-payment-cash-due" aria-live="polite">
+                        {selectedOrder ? formatCurrency(cashDue) : '¥0'}
+                      </p>
+                    </div>
+                    <div className="admin-payment-breakdown-row">
+                      <p className="admin-payment-breakdown-label">金券</p>
+                      <div className="admin-payment-voucher-control" aria-label="金券の枚数">
+                        <button
+                          type="button"
+                          className="admin-payment-adjust"
+                          onClick={() => adjustVoucherCount(-1)}
+                          disabled={voucherCount === 0}
+                          aria-label="金券を1枚減らす"
+                        >
+                          -
+                        </button>
+                        <span className="admin-payment-voucher-count" aria-live="polite">
+                          {voucherCount} 枚（{formatCurrency(voucherAmount)}）
+                        </span>
+                        <button
+                          type="button"
+                          className="admin-payment-adjust"
+                          onClick={() => adjustVoucherCount(1)}
+                          disabled={voucherCount >= maxVoucherCount}
+                          aria-label="金券を1枚増やす"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                    <hr className="admin-payment-breakdown-divider" />
+                    <p className="admin-payment-breakdown-total" aria-live="polite">
+                      合計 {selectedOrder ? formatCurrency(selectedOrder.total) : '¥0'}
+                    </p>
+                  </section>
+                  <div className="admin-payment-voucher-summary" aria-live="polite">
+                    <p className="admin-payment-voucher-summary-label">金券枚数</p>
+                    <p className="admin-payment-voucher-summary-value">
+                      {voucherCount} 枚
+                      <span className="admin-payment-voucher-summary-amount">
+                        （{formatCurrency(voucherAmount)}）
+                      </span>
+                    </p>
+                  </div>
                   <div className="admin-payment-actions">
                     {selectedOrder.payment === '未払い' && (
                       <>
                         <button
                           type="button"
                           className="admin-payment-action"
-                          onClick={() => markPaid(selectedOrder.id)}
+                          onClick={() => markPaid(selectedOrder)}
+                          disabled={mutatingId === selectedOrder.id}
                         >
                           支払い済みにする
                         </button>
                         <button
                           type="button"
                           className="admin-payment-inline-button"
-                          onClick={() => cancelOrder(selectedOrder.id)}
+                          onClick={() => cancelOrder(selectedOrder)}
+                          disabled={mutatingId === selectedOrder.id}
                         >
                           キャンセルにする
                         </button>
@@ -441,7 +614,8 @@ export function AdminPaymentsView() {
                       <button
                         type="button"
                         className="admin-payment-action admin-payment-action--ghost"
-                        onClick={() => revertPayment(selectedOrder.id)}
+                        onClick={() => revertPayment(selectedOrder)}
+                        disabled={mutatingId === selectedOrder.id}
                       >
                         未払いに戻す
                       </button>
@@ -453,20 +627,15 @@ export function AdminPaymentsView() {
               <div className="admin-payment-detail-body">
                 <section className="admin-payment-detail-items">
                   <h3>注文内容</h3>
-                  {selectedOrderItems.length > 0 ? (
-                    <ul>
-                      {selectedOrderItems.map((item, index) => (
-                        <li key={`${item}-${index}`}>{item}</li>
-                      ))}
-                    </ul>
+                  {selectedOrderEntries.length > 0 ? (
+                    <OrderItemsInline
+                      entries={selectedOrderEntries}
+                      totalAriaLabel="商品点数"
+                      variant="compact"
+                      className="admin-payment-items-inline"
+                    />
                   ) : (
                     <p className="admin-payment-detail-placeholder">商品情報を取得できませんでした。</p>
-                  )}
-                  {selectedOrder.customer && (
-                    <p className="admin-payment-detail-note">お客様: {selectedOrder.customer} 様</p>
-                  )}
-                  {selectedOrder.note && (
-                    <p className="admin-payment-detail-note subtle">メモ: {selectedOrder.note}</p>
                   )}
                 </section>
                 <section className="admin-payment-detail-meta">
@@ -485,6 +654,10 @@ export function AdminPaymentsView() {
                     </div>
                     <div>
                       <dt>確認コード</dt>
+                      <dd>{selectedOrderConfirmationCode}</dd>
+                    </div>
+                    <div>
+                      <dt>進捗コード</dt>
                       <dd>{selectedOrder.ticket}</dd>
                     </div>
                   </dl>
@@ -521,25 +694,61 @@ export function AdminPaymentsView() {
           </section>
 
           <section className="admin-payment-recent" aria-label="最近決済した注文">
-            <header>
+            <header className="admin-payment-recent-header">
               <h3>最近の決済</h3>
+              <p className="admin-payment-recent-sub">直近で決済した注文の概要です。</p>
             </header>
             <ul>
-              {recentSettled.map((order) => (
-                <li key={order.id}>
-                  <div className="admin-payment-recent-info">
-                    <span>呼出番号 {order.callNumber}</span>
-                    <small>確認コード {order.ticket}</small>
-                  </div>
-                  <span>{formatCurrency(order.total)}</span>
-                  <span className="admin-payment-time">{order.createdAt}</span>
-                  <button type="button" className="admin-payment-revert" onClick={() => revertPayment(order.id)}>
-                    未払いに戻す
-                  </button>
-                </li>
-              ))}
+              {recentSettled.map((order) => {
+                const confirmationCode = getOrderConfirmationCode(order.id)
+                const itemSummary = order.items.replace(/／/g, '・')
+                return (
+                  <li key={order.id}>
+                    <article className="admin-payment-recent-card">
+                      <div className="admin-payment-recent-top">
+                        <span className="admin-payment-recent-ticket" aria-label={`呼出番号 ${order.callNumber}`}>
+                          呼出 {order.callNumber}
+                        </span>
+                        <div className="admin-payment-recent-meta">
+                          <span className="admin-payment-recent-total">{formatCurrency(order.total)}</span>
+                          <time dateTime={order.createdAt} className="admin-payment-time">
+                            {order.createdAt}
+                          </time>
+                        </div>
+                      </div>
+                      <p className="admin-payment-recent-items" aria-label="注文内容の要約">
+                        {itemSummary}
+                      </p>
+                      <dl className="admin-payment-recent-identifiers">
+                        <div>
+                          <dt>確認コード</dt>
+                          <dd>{confirmationCode}</dd>
+                        </div>
+                        <div>
+                          <dt>注文番号</dt>
+                          <dd>{order.id}</dd>
+                        </div>
+                        <div>
+                          <dt>進捗コード</dt>
+                          <dd>{order.ticket}</dd>
+                        </div>
+                      </dl>
+                      <div className="admin-payment-recent-actions">
+                        <button
+                          type="button"
+                          className="admin-payment-revert"
+                          onClick={() => revertPayment(order)}
+                          disabled={mutatingId === order.id}
+                        >
+                          未払いに戻す
+                        </button>
+                      </div>
+                    </article>
+                  </li>
+                )
+              })}
               {recentSettled.length === 0 && (
-                <li className="admin-payment-history-empty">決済済みの注文はまだありません。</li>
+                <li className="admin-payment-recent-empty">決済済みの注文はまだありません。</li>
               )}
             </ul>
           </section>

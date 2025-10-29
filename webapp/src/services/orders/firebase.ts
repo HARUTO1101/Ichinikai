@@ -14,9 +14,8 @@ import {
   writeBatch,
   type QueryConstraint,
 } from 'firebase/firestore'
-import { auth, db } from '../../lib/firebase'
+import { auth, db, ensureAnonymousUser } from '../../lib/firebase'
 import {
-  MENU_ITEMS,
   type MenuItemKey,
   type OrderLookupResult,
   type OrderSummary,
@@ -24,7 +23,10 @@ import {
   type PaymentStatus,
   type ProgressStatus,
   type KitchenOrdersQuery,
+  type PlatingProgress,
 } from '../../types/order'
+import { getMenuSnapshot } from '../../store/menuConfigStore'
+import { createInitialPlatingProgress, ensurePlatingProgress } from '../../utils/plating'
 
 function generateOrderId(date: Date): string {
   const pad = (value: number) => value.toString().padStart(2, '0')
@@ -59,9 +61,11 @@ function sanitizeItems(rawItems: Partial<Record<MenuItemKey, number>>) {
 }
 
 function calculateTotal(items: Record<MenuItemKey, number>) {
+  const { map: menuMap } = getMenuSnapshot()
   return Object.entries(items).reduce((sum, [key, quantity]) => {
-    const menu = MENU_ITEMS[key as MenuItemKey]
-    return sum + menu.price * quantity
+    const menu = menuMap[key as MenuItemKey]
+    const price = menu?.price ?? 0
+    return sum + price * quantity
   }, 0)
 }
 
@@ -78,6 +82,7 @@ const NEW_ORDER_QUERY_LIMIT = 20
 export async function createOrderFirebase(
   rawItems: Record<MenuItemKey, number>,
 ): Promise<OrderSummary> {
+  await ensureAnonymousUser()
   const items = sanitizeItems(rawItems)
   const hasItems = Object.values(items).some((quantity) => quantity > 0)
 
@@ -91,6 +96,7 @@ export async function createOrderFirebase(
   const total = calculateTotal(items)
   const payment: PaymentStatus = '未払い'
   const progress: ProgressStatus = '受注済み'
+  const plating = createInitialPlatingProgress(items)
   const orderRef = doc(db, 'orders', orderId)
   const lookupRef = doc(db, 'orderLookup', ticket)
   const countersRef = doc(db, 'metadata', 'counters')
@@ -119,6 +125,7 @@ export async function createOrderFirebase(
       total,
       payment,
       progress,
+      plating,
       createdAt: timestamp,
       updatedAt: timestamp,
     })
@@ -131,6 +138,8 @@ export async function createOrderFirebase(
       total,
       payment,
       progress,
+      plating,
+      createdAt: timestamp,
       updatedAt: timestamp,
     })
 
@@ -145,6 +154,8 @@ export async function createOrderFirebase(
     items,
     payment,
     progress,
+    plating,
+    createdAt: now,
   }
 }
 
@@ -161,16 +172,20 @@ export async function fetchOrderByTicketFirebase(
   }
 
   const data = snapshot.data()
+  const items = (data.items as Record<MenuItemKey, number>) ?? {}
+  const plating = ensurePlatingProgress(items, data.plating as Partial<PlatingProgress> | undefined)
 
   return {
     orderId: data.orderId,
     ticket: trimmed,
     callNumber: (data.callNumber as number | undefined) ?? 0,
     total: data.total,
-    items: data.items,
+    items,
     payment: data.payment,
     progress: data.progress,
+    plating,
     updatedAt: toDate(data.updatedAt as Timestamp | undefined),
+    createdAt: toDate(data.createdAt as Timestamp | undefined),
   }
 }
 
@@ -183,14 +198,16 @@ export async function fetchOrderDetailFirebase(
     return null
   }
   const data = snapshot.data()
+  const items = (data.items as Record<MenuItemKey, number>) ?? {}
   return {
     orderId: data.orderId as string,
     ticket: data.ticket as string,
     callNumber: (data.callNumber as number | undefined) ?? 0,
-    items: data.items as Record<MenuItemKey, number>,
+    items,
     total: data.total as number,
     payment: data.payment as PaymentStatus,
     progress: data.progress as ProgressStatus,
+    plating: ensurePlatingProgress(items, data.plating as Partial<PlatingProgress> | undefined),
     createdAt: toDate(data.createdAt as Timestamp | undefined),
     updatedAt: toDate(data.updatedAt as Timestamp | undefined),
     createdBy: (data.createdBy as string | null | undefined) ?? null,
@@ -221,6 +238,32 @@ export async function updateOrderStatusFirebase(
   await batch.commit()
 }
 
+export async function updateOrderPlatingFirebase(
+  orderId: string,
+  ticket: string,
+  updates: Partial<PlatingProgress>,
+) {
+  const entries = Object.entries(updates).filter(([, value]) => typeof value === 'boolean')
+  if (entries.length === 0) return
+
+  const batch = writeBatch(db)
+  const orderRef = doc(db, 'orders', orderId)
+  const lookupRef = doc(db, 'orderLookup', ticket)
+
+  const payload: Record<string, unknown> = {
+    updatedAt: serverTimestamp(),
+  }
+
+  entries.forEach(([key, value]) => {
+    payload[`plating.${key}`] = value
+  })
+
+  batch.update(orderRef, payload)
+  batch.update(lookupRef, payload)
+
+  await batch.commit()
+}
+
 export async function searchOrderByTicketOrIdFirebase(
   value: string,
 ): Promise<OrderDetail | null> {
@@ -246,15 +289,17 @@ export async function searchOrderByTicketOrIdFirebase(
 
   const docSnap = snapshot.docs[0]
   const data = docSnap.data()
+  const items = (data.items as Record<MenuItemKey, number>) ?? {}
 
   return {
     orderId: data.orderId as string,
     ticket: data.ticket as string,
     callNumber: (data.callNumber as number | undefined) ?? 0,
-    items: data.items as Record<MenuItemKey, number>,
+    items,
     total: data.total as number,
     payment: data.payment as PaymentStatus,
     progress: data.progress as ProgressStatus,
+    plating: ensurePlatingProgress(items, data.plating as Partial<PlatingProgress> | undefined),
     updatedAt: toDate(data.updatedAt as Timestamp | undefined),
     createdAt: toDate(data.createdAt as Timestamp | undefined),
     createdBy: (data.createdBy as string | null | undefined) ?? null,
@@ -280,14 +325,16 @@ export async function fetchKitchenOrdersFirebase(
 
   return snapshot.docs.map((docSnap) => {
     const data = docSnap.data()
+    const items = (data.items as Record<MenuItemKey, number>) ?? {}
     return {
       orderId: data.orderId as string,
       ticket: data.ticket as string,
       callNumber: (data.callNumber as number | undefined) ?? 0,
-      items: data.items as Record<MenuItemKey, number>,
+      items,
       total: data.total as number,
       payment: data.payment as PaymentStatus,
       progress: data.progress as ProgressStatus,
+      plating: ensurePlatingProgress(items, data.plating as Partial<PlatingProgress> | undefined),
       createdAt: toDate(data.createdAt as Timestamp | undefined),
       updatedAt: toDate(data.updatedAt as Timestamp | undefined),
       createdBy: (data.createdBy as string | null | undefined) ?? null,
@@ -322,15 +369,17 @@ export function subscribeNewOrdersFirebase(
           seenIds.add(docId)
 
           const data = change.doc.data()
+          const items = (data.items as Record<MenuItemKey, number>) ?? {}
 
           onAdded({
             orderId: data.orderId as string,
             ticket: data.ticket as string,
             callNumber: (data.callNumber as number | undefined) ?? 0,
-            items: data.items as Record<MenuItemKey, number>,
+            items,
             total: data.total as number,
             payment: data.payment as PaymentStatus,
             progress: data.progress as ProgressStatus,
+            plating: ensurePlatingProgress(items, data.plating as Partial<PlatingProgress> | undefined),
             createdAt: toDate(data.createdAt as Timestamp | undefined),
             updatedAt: toDate(data.updatedAt as Timestamp | undefined),
             createdBy: (data.createdBy as string | null | undefined) ?? null,
@@ -339,6 +388,89 @@ export function subscribeNewOrdersFirebase(
     },
     (error) => {
       console.error('Failed to subscribe new orders', error)
+      options.onError?.(error)
+    },
+  )
+
+  return unsubscribe
+}
+
+export function subscribeOrdersFirebase(
+  onChange: (orders: OrderDetail[]) => void,
+  options: SubscribeOptions = {},
+): () => void {
+  const ordersRef = collection(db, 'orders')
+  const snapshotQuery = query(ordersRef, orderBy('createdAt', 'desc'))
+
+  const unsubscribe = onSnapshot(
+    snapshotQuery,
+    (snapshot) => {
+      const orders = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data()
+        const items = (data.items as Record<MenuItemKey, number>) ?? {}
+        return {
+          orderId: (data.orderId as string) ?? docSnap.id,
+          ticket: data.ticket as string,
+          callNumber: (data.callNumber as number | undefined) ?? 0,
+          items,
+          total: data.total as number,
+          payment: data.payment as PaymentStatus,
+          progress: data.progress as ProgressStatus,
+          plating: ensurePlatingProgress(items, data.plating as Partial<PlatingProgress> | undefined),
+          createdAt: toDate(data.createdAt as Timestamp | undefined),
+          updatedAt: toDate(data.updatedAt as Timestamp | undefined),
+          createdBy: (data.createdBy as string | null | undefined) ?? null,
+        }
+      })
+      onChange(orders)
+    },
+    (error) => {
+      console.error('Failed to subscribe orders collection', error)
+      options.onError?.(error)
+    },
+  )
+
+  return unsubscribe
+}
+
+export function subscribeOrderLookupFirebase(
+  ticket: string,
+  onChange: (order: OrderLookupResult | null) => void,
+  options: SubscribeOptions = {},
+): () => void {
+  const trimmed = ticket.trim().toUpperCase()
+  if (!trimmed) {
+    onChange(null)
+    return () => {}
+  }
+
+  const lookupRef = doc(db, 'orderLookup', trimmed)
+
+  const unsubscribe = onSnapshot(
+    lookupRef,
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        onChange(null)
+        return
+      }
+
+      const data = snapshot.data()
+      const items = (data.items as Record<MenuItemKey, number>) ?? {}
+      onChange({
+        orderId: (data.orderId as string) ?? trimmed,
+        ticket: trimmed,
+        callNumber: (data.callNumber as number | undefined) ?? 0,
+        total: data.total as number,
+        items,
+        payment: data.payment as PaymentStatus,
+        progress: data.progress as ProgressStatus,
+        plating: ensurePlatingProgress(items, data.plating as Partial<PlatingProgress> | undefined),
+        updatedAt: toDate(data.updatedAt as Timestamp | undefined),
+        createdAt: toDate(data.createdAt as Timestamp | undefined),
+      })
+    },
+    (error) => {
+      console.error('Failed to subscribe order lookup', error)
       options.onError?.(error)
     },
   )
@@ -371,11 +503,16 @@ export async function exportOrdersCsvFirebase() {
     'updatedAt',
   ]
 
+  const { map: menuMap } = getMenuSnapshot()
   const rows = snapshot.docs.map((docSnap) => {
     const data = docSnap.data()
     const items = data.items as Record<MenuItemKey, number>
     const itemSummary = Object.entries(items)
-      .map(([key, quantity]) => `${MENU_ITEMS[key as MenuItemKey].label}:${quantity}`)
+      .map(([key, quantity]) => {
+        const menu = menuMap[key as MenuItemKey]
+        const label = menu?.label ?? key
+        return `${label}:${quantity}`
+      })
       .join(' | ')
 
     return [

@@ -1,5 +1,17 @@
-export type OrderProgress = '受注済み' | '調理済み' | 'クローズ'
-export type OrderPayment = '未払い' | '支払い済み' | 'キャンセル'
+import { getMenuSnapshot } from '../../../store/menuConfigStore'
+import {
+  type MenuItemKey,
+  type OrderDetail,
+  type PaymentStatus,
+  type ProgressStatus,
+  type PlatingStatusMap,
+} from '../../../types/order'
+import { derivePlatingStatus } from '../../../utils/plating'
+
+const timeFormatter = new Intl.DateTimeFormat('ja-JP', {
+  hour: '2-digit',
+  minute: '2-digit',
+})
 
 export interface OrderRow {
   id: string
@@ -7,85 +19,79 @@ export interface OrderRow {
   ticket: string
   items: string
   total: number
-  payment: OrderPayment
-  progress: OrderProgress
+  payment: PaymentStatus
+  progress: ProgressStatus
   createdAt: string
-  customer?: string
-  note?: string
+  createdAtDate: Date | null
+  updatedAtDate: Date | null
+  confirmationCode: string
+  raw: OrderDetail
+  platingStatus: PlatingStatusMap
 }
 
-export const progressStages: ReadonlyArray<OrderProgress> = ['受注済み', '調理済み', 'クローズ'] as const
+export const progressStages: ReadonlyArray<ProgressStatus> = ['受注済み', '調理済み', 'クローズ'] as const
 
-export const dummyOrders: OrderRow[] = [
-  {
-    id: '#1083',
-    callNumber: 208,
-    ticket: 'T-1248',
-    items: 'ワッフル（2）／アイスコーヒー（1）',
-    total: 3200,
-    payment: '未払い',
-    progress: '調理済み',
-    createdAt: '10:24',
-    customer: '山田',
-    note: 'アイスコーヒーは氷少なめ',
-  },
-  {
-    id: '#1082',
-    callNumber: 207,
-    ticket: 'T-1247',
-    items: 'ホットサンド（1）',
-    total: 900,
-    payment: '支払い済み',
-    progress: '調理済み',
-    createdAt: '10:20',
-    customer: '佐藤',
-  },
-  {
-    id: '#1081',
-    callNumber: 206,
-    ticket: 'T-1246',
-    items: 'ワッフル（1）／ジンジャーエール（2）',
-    total: 2100,
-    payment: '未払い',
-    progress: '受注済み',
-    createdAt: '10:18',
-    customer: '田中',
-  },
-  {
-    id: '#1079',
-    callNumber: 205,
-    ticket: 'T-1244',
-    items: 'ワッフル（3）',
-    total: 2700,
-    payment: '支払い済み',
-    progress: 'クローズ',
-    createdAt: '10:10',
-    customer: '森',
-  },
-  {
-    id: '#1078',
-    callNumber: 204,
-    ticket: 'T-1243',
-    items: '抹茶ラテ（2）／クロワッサン（2）',
-    total: 2200,
-    payment: '未払い',
-    progress: '調理済み',
-    createdAt: '10:06',
-    customer: '高橋',
-    note: 'クロワッサンは紙袋別添',
-  },
-  {
-    id: '#1076',
-    callNumber: 203,
-    ticket: 'T-1241',
-    items: 'チュロス（3）／ホットココア（2）',
-    total: 2600,
-    payment: '未払い',
-    progress: '受注済み',
-    createdAt: '09:58',
-  },
-]
+function formatOrderItems(items: Record<MenuItemKey, number>): string {
+  const { map: menuMap } = getMenuSnapshot()
+  const parts = Object.entries(items)
+    .filter(([, quantity]) => quantity > 0)
+    .map(([key, quantity]) => {
+      const menu = menuMap[key as MenuItemKey]
+      const label = menu?.label ?? key
+      return `${label}（${quantity}）`
+    })
+  return parts.join('／') || '—'
+}
 
-export function getInitialOrders(): OrderRow[] {
-  return dummyOrders.map((order) => ({ ...order }))
+function formatTime(date: Date | null | undefined): string {
+  if (!date) return '--:--'
+  return timeFormatter.format(date)
+}
+
+export function mapOrderDetailToRow(order: OrderDetail): OrderRow {
+  const createdAtDate = order.createdAt ?? order.updatedAt ?? null
+  const updatedAtDate = order.updatedAt ?? null
+
+  return {
+    id: order.orderId,
+    callNumber: order.callNumber ?? 0,
+    ticket: order.ticket,
+    items: formatOrderItems(order.items ?? {}),
+    total: order.total,
+    payment: order.payment,
+    progress: order.progress,
+    createdAt: formatTime(createdAtDate),
+    createdAtDate,
+    updatedAtDate,
+    confirmationCode: getOrderConfirmationCode(order.orderId),
+    raw: order,
+    platingStatus: derivePlatingStatus(order.items ?? {}, order.plating),
+  }
+}
+
+export function getOrderConfirmationCode(orderId: string): string {
+  if (!orderId) return '----'
+  const lettersOnly = (orderId.match(/[A-Za-z]/g) ?? []).map((char) => char.toUpperCase())
+  if (lettersOnly.length === 0) {
+    return '----'
+  }
+
+  if (lettersOnly.length >= 4) {
+    return lettersOnly.slice(-4).join('')
+  }
+
+  const repeated = lettersOnly.join('').repeat(Math.ceil(4 / lettersOnly.length))
+  return repeated.slice(-4)
+}
+
+export function nextProgressStatus(current: ProgressStatus): ProgressStatus | null {
+  if (current === '受注済み') return '調理済み'
+  if (current === '調理済み') return 'クローズ'
+  return null
+}
+
+export function previousProgressStatus(current: ProgressStatus): ProgressStatus | null {
+  if (current === 'クローズ') return '調理済み'
+  if (current === '調理済み') return '受注済み'
+  return null
 }

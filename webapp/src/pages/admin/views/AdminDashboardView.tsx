@@ -1,73 +1,171 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { useOrdersSubscription } from '../../../hooks/useOrdersSubscription'
+import { useMenuConfig } from '../../../hooks/useMenuConfig'
+import type { MenuItemKey, OrderDetail } from '../../../types/order'
 
-const sampleOrders = [
-  {
-    id: '#1083',
-    callNumber: 208,
-    ticket: 'T-1248',
-    total: 3200,
-    status: '調理済み',
-    payment: '未払い',
-    createdAt: '10:24',
-  },
-  {
-    id: '#1082',
-    callNumber: 207,
-    ticket: 'T-1247',
-    total: 1800,
-    status: '調理済み',
-    payment: '支払い済み',
-    createdAt: '10:20',
-  },
-  {
-    id: '#1081',
-    callNumber: 206,
-    ticket: 'T-1246',
-    total: 2400,
-    status: '受注済み',
-    payment: '未払い',
-    createdAt: '10:18',
-  },
-]
-
-const summaryDefinitions = [
-  { label: '本日の注文', key: 'orders', unit: '件' },
-  { label: '進行中', key: 'inProgress', unit: '件' },
-  { label: '売上見込み', key: 'revenue', unit: '円' },
-]
-
-const mockMetrics = {
-  orders: 128,
-  inProgress: 12,
-  revenue: 184_600,
-}
-
-const activities = [
-  { id: 1, time: '10:25', message: '呼出番号 208 のステータスが「調理済み」に更新されました。' },
-  { id: 2, time: '10:18', message: '受付状態が「受け付け中」に変更されました。' },
-  { id: 3, time: '10:12', message: '新規注文の呼出番号 205 を発番しました。' },
-  { id: 4, time: '09:58', message: '呼出番号 201 の支払いが完了しました。' },
-]
-
-const exportTips = [
-  '最新 24 時間の注文を CSV 形式でダウンロードできます。',
-  'Google スプレッドシートにインポートすると集計・共有が容易です。',
-  'エクスポートにはデータ量に応じて最大 10 秒程度かかる場合があります。',
-]
+type DashboardMode = 'default' | 'export'
+type TimeRangeOption = 'today' | 'yesterday' | '7days'
 
 interface AdminDashboardViewProps {
-  mode?: 'default' | 'export'
+  mode?: DashboardMode
+}
+
+const timeRangeOptions: Array<{ value: TimeRangeOption; label: string }> = [
+  { value: 'today', label: '今日' },
+  { value: 'yesterday', label: '昨日' },
+  { value: '7days', label: '直近7日間' },
+]
+
+const exportTips: string[] = [
+  '最新 24 時間の注文を CSV 形式でダウンロードできます。',
+  'Google スプレッドシートにインポートすると集計や共有が容易になります。',
+  'エクスポートにはデータ量に応じて最大 10 秒ほどかかる場合があります。',
+]
+
+const currencyFormatter = new Intl.NumberFormat('ja-JP', {
+  style: 'currency',
+  currency: 'JPY',
+  maximumFractionDigits: 0,
+})
+
+const numberFormatter = new Intl.NumberFormat('ja-JP', {
+  maximumFractionDigits: 0,
+})
+
+interface HourlySeriesEntry {
+  hour: number
+  orderCount: number
+  revenue: number
+  cumulativeRevenue: number
+}
+
+interface ProductStat {
+  key: MenuItemKey
+  label: string
+  totalCount: number
+  totalRevenue: number
+  peakHour: number | null
+  hourlyBreakdown: Array<{ hour: number; count: number; revenue: number }>
 }
 
 export function AdminDashboardView({ mode = 'default' }: AdminDashboardViewProps) {
-  const summaryCards = useMemo(
+  const [timeRange, setTimeRange] = useState<TimeRangeOption>('today')
+  const { orders, loading, error } = useOrdersSubscription()
+  const { menuItems } = useMenuConfig()
+
+  const { start, end } = useMemo(() => resolveTimeRange(timeRange), [timeRange])
+
+  const filteredOrders = useMemo(
     () =>
-      summaryDefinitions.map((definition) => ({
-        ...definition,
-        value: mockMetrics[definition.key as keyof typeof mockMetrics],
-      })),
-    [],
+      orders.filter((order) => {
+        const timestamp = getOrderTimestamp(order)
+        if (!timestamp) return false
+        return timestamp >= start && timestamp < end
+      }),
+    [orders, start, end],
   )
+
+  const activeOrders = useMemo(
+    () => filteredOrders.filter((order) => order.payment !== 'キャンセル'),
+    [filteredOrders],
+  )
+
+  const totals = useMemo(() => {
+    const totalRevenue = activeOrders.reduce((sum, order) => sum + (order.total ?? 0), 0)
+    const totalOrders = activeOrders.length
+    const paidOrders = activeOrders.filter((order) => order.payment === '支払い済み').length
+    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0
+    return {
+      totalRevenue,
+      totalOrders,
+      averageOrderValue,
+      paidOrders,
+    }
+  }, [activeOrders])
+
+  const hourlySeries = useMemo<HourlySeriesEntry[]>(() => {
+    const base = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      orderCount: 0,
+      revenue: 0,
+      cumulativeRevenue: 0,
+    }))
+
+    activeOrders.forEach((order) => {
+      const timestamp = getOrderTimestamp(order)
+      if (!timestamp) return
+      const hourIndex = timestamp.getHours()
+      const bucket = base[hourIndex]
+      bucket.orderCount += 1
+      bucket.revenue += order.total ?? 0
+    })
+
+    let runningRevenue = 0
+    return base.map((bucket) => {
+      runningRevenue += bucket.revenue
+      return {
+        ...bucket,
+        cumulativeRevenue: runningRevenue,
+      }
+    })
+  }, [activeOrders])
+
+  const peakHourlyOrders = useMemo(
+    () => hourlySeries.reduce((max, entry) => Math.max(max, entry.orderCount), 0),
+    [hourlySeries],
+  )
+  const peakHourlyRevenue = useMemo(
+    () => hourlySeries.reduce((max, entry) => Math.max(max, entry.revenue), 0),
+    [hourlySeries],
+  )
+
+  const productStats = useMemo<ProductStat[]>(() => {
+    return menuItems.map((item) => {
+      const hourly = Array.from({ length: 24 }, () => ({ count: 0, revenue: 0 }))
+      let totalCount = 0
+      let totalRevenue = 0
+
+      activeOrders.forEach((order) => {
+        const timestamp = getOrderTimestamp(order)
+        if (!timestamp) return
+        const quantity = order.items[item.key] ?? 0
+        if (quantity <= 0) return
+
+        const hourIndex = timestamp.getHours()
+        const revenue = quantity * item.price
+        hourly[hourIndex].count += quantity
+        hourly[hourIndex].revenue += revenue
+        totalCount += quantity
+        totalRevenue += revenue
+      })
+
+      const peak = hourly.reduce(
+        (acc, entry, hourIndex) => {
+          if (entry.count > acc.count) {
+            return { count: entry.count, hour: hourIndex }
+          }
+          return acc
+        },
+        { count: 0, hour: -1 },
+      )
+
+      const hourlyBreakdown = hourly
+        .map((entry, hourIndex) => ({ hour: hourIndex, count: entry.count, revenue: entry.revenue }))
+        .filter((entry) => entry.count > 0)
+
+      return {
+        key: item.key,
+        label: item.label,
+        totalCount,
+        totalRevenue,
+        peakHour: peak.count > 0 ? peak.hour : null,
+        hourlyBreakdown,
+      }
+    })
+  }, [activeOrders, menuItems])
+
+  const hasData = activeOrders.length > 0
+  const rangeLabel = useMemo(() => formatRangeLabel(start, end), [start, end])
 
   if (mode === 'export') {
     return (
@@ -104,7 +202,7 @@ export function AdminDashboardView({ mode = 'default' }: AdminDashboardViewProps
         <section className="admin-card">
           <h3>エクスポートのヒント</h3>
           <ul className="admin-list">
-            {exportTips.map((tip) => (
+            {exportTips.map((tip: string) => (
               <li key={tip}>{tip}</li>
             ))}
           </ul>
@@ -115,76 +213,236 @@ export function AdminDashboardView({ mode = 'default' }: AdminDashboardViewProps
 
   return (
     <div className="admin-grid" style={{ gap: '28px' }}>
-      <div className="admin-grid columns-3">
-        {summaryCards.map((card) => (
-          <article key={card.label} className="admin-card">
-            <p className="admin-content-overline" style={{ marginBottom: 6 }}>
-              {card.label}
-            </p>
-            <h3>
-              {card.value.toLocaleString()} {card.unit}
-            </h3>
-            <p>前日比 +8%</p>
-          </article>
-        ))}
-      </div>
-
-      <section className="admin-card">
-        <header>
-          <h3>最新の注文</h3>
-          <p>リアルタイムで更新されます（デモデータ）。</p>
-        </header>
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th scope="col">時刻</th>
-              <th scope="col">注文番号</th>
-              <th scope="col">呼出番号</th>
-              <th scope="col">進捗確認コード</th>
-              <th scope="col">合計</th>
-              <th scope="col">支払い</th>
-              <th scope="col">進捗</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sampleOrders.map((order) => (
-              <tr key={order.id}>
-                <td>{order.createdAt}</td>
-                <td>{order.id}</td>
-                <td>{order.callNumber}</td>
-                <td>{order.ticket}</td>
-                <td>{order.total.toLocaleString()} 円</td>
-                <td>
-                  <span
-                    className={
-                      order.payment === '支払い済み'
-                        ? 'admin-status-badge success'
-                        : 'admin-status-badge warning'
-                    }
-                  >
-                    {order.payment}
-                  </span>
-                </td>
-                <td>
-                  <span className="admin-status-badge">{order.status}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <section className="admin-card admin-dashboard-controls">
+        <div>
+          <p className="admin-content-overline">集計期間</p>
+          <h3>{rangeLabel}</h3>
+        </div>
+        <div className="admin-toolbar" style={{ marginBottom: 0 }}>
+          <div className="field">
+            <label htmlFor="dashboard-range">期間を選択</label>
+            <select
+              id="dashboard-range"
+              value={timeRange}
+              onChange={(event) => setTimeRange(event.target.value as TimeRangeOption)}
+            >
+              {timeRangeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </section>
 
-      <section className="admin-card">
-        <h3>アクティビティ</h3>
-        <ul className="admin-list">
-          {activities.map((activity) => (
-            <li key={activity.id}>
-              <p style={{ margin: 0, color: '#1f2937' }}>{activity.message}</p>
-              <small style={{ color: '#64748b' }}>{activity.time}</small>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {loading ? (
+        <section className="admin-card admin-empty-state">
+          <p>注文データを読み込んでいます…</p>
+        </section>
+      ) : error ? (
+        <section className="admin-card admin-empty-state">
+          <p>注文データの取得に失敗しました。</p>
+          <small>{error.message}</small>
+        </section>
+      ) : (
+        <>
+          <div className="admin-grid admin-metric-cards">
+            <article className="admin-card admin-metric-card">
+              <p className="admin-content-overline">総売上</p>
+              <h3 className="admin-metric-card-value">
+                {currencyFormatter.format(totals.totalRevenue)}
+              </h3>
+              <p className="admin-metric-card-helper">キャンセルを除く注文の合計金額</p>
+            </article>
+            <article className="admin-card admin-metric-card">
+              <p className="admin-content-overline">注文件数</p>
+              <h3 className="admin-metric-card-value">{numberFormatter.format(totals.totalOrders)} 件</h3>
+              <p className="admin-metric-card-helper">
+                支払い済み {numberFormatter.format(totals.paidOrders)} 件
+              </p>
+            </article>
+            <article className="admin-card admin-metric-card">
+              <p className="admin-content-overline">平均単価</p>
+              <h3 className="admin-metric-card-value">
+                {currencyFormatter.format(totals.averageOrderValue || 0)}
+              </h3>
+              <p className="admin-metric-card-helper">キャンセルを除く注文から算出</p>
+            </article>
+          </div>
+
+          <section className="admin-card">
+            <header className="admin-card-header">
+              <div>
+                <h3>時間帯別の推移</h3>
+                <p>売上と件数を 1 時間ごとに集計しています。</p>
+              </div>
+            </header>
+            {hasData ? (
+              <table className="admin-table admin-hourly-table">
+                <thead>
+                  <tr>
+                    <th scope="col">時間帯</th>
+                    <th scope="col">件数</th>
+                    <th scope="col">売上</th>
+                    <th scope="col">累積売上</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {hourlySeries.map((entry) => (
+                    <tr key={entry.hour}>
+                      <td>{formatHourRange(entry.hour)}</td>
+                      <td>
+                        {numberFormatter.format(entry.orderCount)}
+                        <div className="admin-trend-bar orders">
+                          <span
+                            style={{
+                              width: `${peakHourlyOrders > 0 ? (entry.orderCount / peakHourlyOrders) * 100 : 0}%`,
+                            }}
+                          />
+                        </div>
+                      </td>
+                      <td>
+                        {currencyFormatter.format(entry.revenue)}
+                        <div className="admin-trend-bar revenue">
+                          <span
+                            style={{
+                              width: `${peakHourlyRevenue > 0 ? (entry.revenue / peakHourlyRevenue) * 100 : 0}%`,
+                            }}
+                          />
+                        </div>
+                      </td>
+                      <td>{currencyFormatter.format(entry.cumulativeRevenue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="admin-empty-inline">指定期間の注文はありません。</p>
+            )}
+          </section>
+
+          <section className="admin-card">
+            <header className="admin-card-header">
+              <div>
+                <h3>商品別の売上・数量</h3>
+                <p>時間帯ごとの傾向も確認できます。</p>
+              </div>
+            </header>
+            {hasData ? (
+              <>
+                <table className="admin-table admin-product-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">商品</th>
+                      <th scope="col">数量</th>
+                      <th scope="col">売上</th>
+                      <th scope="col">ピーク時間</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {productStats.map((product) => (
+                      <tr key={product.key}>
+                        <td>{product.label}</td>
+                        <td>{numberFormatter.format(product.totalCount)} 個</td>
+                        <td>{currencyFormatter.format(product.totalRevenue)}</td>
+                        <td>{product.peakHour != null ? formatHourRange(product.peakHour) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div className="admin-product-breakdown">
+                  {productStats.every((stat) => stat.hourlyBreakdown.length === 0) ? (
+                    <p className="admin-empty-inline">商品別の販売データがありません。</p>
+                  ) : (
+                    productStats
+                      .filter((stat) => stat.hourlyBreakdown.length > 0)
+                      .map((stat) => (
+                        <details key={stat.key} className="admin-product-breakdown-item">
+                          <summary>{stat.label} の時間帯別内訳</summary>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th scope="col">時間帯</th>
+                                <th scope="col">数量</th>
+                                <th scope="col">売上</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {stat.hourlyBreakdown.map((entry) => (
+                                <tr key={`${stat.key}-${entry.hour}`}>
+                                  <td>{formatHourRange(entry.hour)}</td>
+                                  <td>{numberFormatter.format(entry.count)} 個</td>
+                                  <td>{currencyFormatter.format(entry.revenue)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </details>
+                      ))
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="admin-empty-inline">商品別の集計はデータがあるときに表示されます。</p>
+            )}
+          </section>
+        </>
+      )}
     </div>
   )
+}
+
+function resolveTimeRange(option: TimeRangeOption): { start: Date; end: Date } {
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+  if (option === 'today') {
+    return { start: startOfToday, end: addDays(startOfToday, 1) }
+  }
+
+  if (option === 'yesterday') {
+    const start = addDays(startOfToday, -1)
+    return { start, end: startOfToday }
+  }
+
+  const start = addDays(startOfToday, -6)
+  return { start, end: addDays(startOfToday, 1) }
+}
+
+function addDays(base: Date, amount: number): Date {
+  const next = new Date(base)
+  next.setDate(next.getDate() + amount)
+  return next
+}
+
+function getOrderTimestamp(order: OrderDetail): Date | null {
+  const created = order.createdAt
+  const updated = order.updatedAt
+  if (created instanceof Date) return created
+  if (typeof created === 'string') return new Date(created)
+  if (updated instanceof Date) return updated
+  if (typeof updated === 'string') return new Date(updated)
+  return null
+}
+
+function formatHourRange(hour: number): string {
+  const start = `${hour.toString().padStart(2, '0')}:00`
+  const endHour = hour === 23 ? '23:59' : `${(hour + 1).toString().padStart(2, '0')}:00`
+  return `${start} - ${endHour}`
+}
+
+function formatRangeLabel(start: Date, end: Date): string {
+  const formatter = new Intl.DateTimeFormat('ja-JP', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
+  const startLabel = formatter.format(start)
+  const inclusiveEnd = new Date(end.getTime() - 1)
+  const endLabel = formatter.format(inclusiveEnd)
+  return `${startLabel} 〜 ${endLabel}`
 }

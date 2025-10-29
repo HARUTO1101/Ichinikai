@@ -360,6 +360,129 @@
   min-width: 160px;
 }
 
+.admin-dashboard-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.admin-metric-cards {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+.admin-metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: 0 18px 32px -30px rgba(15, 23, 42, 0.4);
+}
+
+.admin-metric-card-value {
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  margin: 4px 0;
+  color: #0f172a;
+}
+
+.admin-metric-card-helper {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.admin-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.admin-hourly-table tbody td {
+  vertical-align: top;
+}
+
+.admin-trend-bar {
+  margin-top: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.9);
+  overflow: hidden;
+}
+
+.admin-trend-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.admin-trend-bar.orders span {
+  background: rgba(37, 99, 235, 0.6);
+}
+
+.admin-trend-bar.revenue span {
+  background: rgba(5, 150, 105, 0.65);
+}
+
+.admin-empty-state {
+  text-align: center;
+  display: grid;
+  gap: 6px;
+  padding: clamp(40px, 6vw, 60px);
+}
+
+.admin-empty-inline {
+  margin: 0;
+  color: #64748b;
+  padding: 12px 0;
+}
+
+.admin-product-table tbody td {
+  vertical-align: middle;
+}
+
+.admin-product-breakdown {
+  margin-top: 24px;
+  display: grid;
+  gap: 12px;
+}
+
+.admin-product-breakdown-item {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  padding: 12px 16px;
+  background: #ffffff;
+}
+
+.admin-product-breakdown-item summary {
+  font-weight: 600;
+  cursor: pointer;
+  color: #1f2937;
+}
+
+.admin-product-breakdown-item table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.admin-product-breakdown-item th,
+.admin-product-breakdown-item td {
+  text-align: left;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+  font-size: 0.9rem;
+}
+
+.admin-product-breakdown-item tbody tr:last-child td {
+  border-bottom: none;
+}
+
 .admin-primary-button {
   padding: 12px 18px;
   border-radius: 12px;
@@ -427,6 +550,64 @@
   box-shadow: 0 18px 36px -26px rgba(15, 23, 42, 0.16);
 }
 
+.admin-production-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.admin-production-view-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  background: #ffffff;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1f2937;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.14s ease;
+}
+
+.admin-production-view-tab:hover {
+  border-color: rgba(37, 99, 235, 0.6);
+  box-shadow: 0 10px 24px -18px rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+
+.admin-production-view-tab.is-active {
+  border-color: rgba(37, 99, 235, 0.9);
+  box-shadow: 0 16px 36px -24px rgba(37, 99, 235, 0.45);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(37, 99, 235, 0));
+  color: #1d4ed8;
+}
+
+.admin-production-view-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.admin-production-view-tab-icon {
+  font-size: 1.1rem;
+}
+
+.admin-production-view-tab-text {
+  letter-spacing: 0.02em;
+}
+
+.admin-production-view-tab-count .admin-production-badge {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  font-size: 0.85rem;
+  background: #1d4ed8;
+}
+
 
 .admin-production-summary {
   background: linear-gradient(140deg, rgba(37, 99, 235, 0.08), rgba(37, 99, 235, 0));
@@ -465,14 +646,14 @@
 .admin-production-table-header,
 .admin-production-table-body {
   display: grid;
-  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  grid-template-columns: minmax(320px, 2fr) minmax(220px, 1fr);
   gap: 18px;
 }
 
 @media (max-width: 1280px) {
   .admin-production-table-header,
   .admin-production-table-body {
-    grid-template-columns: repeat(2, minmax(240px, 1fr));
+    grid-template-columns: minmax(280px, 2fr) minmax(200px, 1fr);
   }
 }
 
@@ -534,34 +715,201 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-height: clamp(320px, 62vh, 540px);
+  overflow-y: auto;
+  padding-right: 6px;
+  scroll-padding: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(37, 99, 235, 0.45) rgba(226, 232, 240, 0.6);
 }
 
+.admin-production-table-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.admin-production-table-list::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.6);
+  border-radius: 999px;
+}
+
+.admin-production-table-list::-webkit-scrollbar-thumb {
+  background: rgba(37, 99, 235, 0.45);
+  border-radius: 999px;
+}
+
+.admin-production-table-list:hover::-webkit-scrollbar-thumb {
+  background: rgba(37, 99, 235, 0.65);
+}
+
+
 .admin-production-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  align-items: start;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: linear-gradient(165deg, #ffffff 0%, #f8fafc 100%);
   box-shadow: 0 16px 32px -28px rgba(15, 23, 42, 0.16);
 }
 
+.admin-production-row--compact {
+  padding: 10px 12px;
+}
+
+.admin-production-row-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.admin-payment-ticket.badge.admin-production-ticket-compact {
+  width: clamp(56px, 8vw, 72px);
+  height: clamp(56px, 8vw, 72px);
+  border-radius: 18px;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+}
+
+.admin-production-row-actions--compact {
+  flex: 1;
+  justify-content: flex-end;
+}
+
 .admin-production-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-production-row-inline {
   display: grid;
-  gap: 4px;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.admin-production-ticket-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 68px;
 }
 
 .admin-production-ticket {
   margin: 0;
 }
 
-.admin-production-items {
-  margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.45;
-  color: #1f2937;
+.admin-production-items-card {
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 10px 12px;
+  flex: 1;
+}
+
+.admin-production-items-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-production-item-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  min-width: 60px;
+}
+
+.admin-production-item-label {
+  font-size: 0.7rem;
+  color: #475569;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.admin-production-quantity {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+  transition: transform 0.15s ease, background 0.2s ease;
+}
+
+.admin-production-quantity.is-complete {
+  background: rgba(34, 197, 94, 0.18);
+  color: #15803d;
+}
+
+.admin-production-quantity.is-pending {
+  background: rgba(250, 204, 21, 0.18);
+  color: #92400e;
+}
+
+.admin-production-quantity.is-zero {
+  background: rgba(226, 232, 240, 0.6);
+  color: #94a3b8;
+}
+
+.admin-production-total-quantity {
+  min-width: 64px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.14), rgba(37, 99, 235, 0));
+  color: #1d4ed8;
+  font-weight: 700;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-order-items-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.admin-order-items-inline .admin-production-items-card {
+  flex: 1 1 auto;
+}
+
+.admin-order-items-inline.compact {
+  gap: 10px;
+}
+
+.admin-order-items-inline.compact .admin-production-items-card {
+  padding: 8px 10px;
+}
+
+.admin-order-items-inline.compact .admin-production-item-cell {
+  min-width: 48px;
+}
+
+.admin-order-items-inline.compact .admin-production-item-label {
+  font-size: 0.65rem;
+}
+
+.admin-order-items-inline.compact .admin-production-quantity {
+  min-width: 32px;
+  font-size: 1rem;
+  padding: 3px 6px;
+}
+
+.admin-order-items-inline.compact .admin-production-total-quantity {
+  min-width: 54px;
+  height: 48px;
+  font-size: 1.2rem;
 }
 
 .admin-production-row-meta {
@@ -603,9 +951,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -631,18 +979,24 @@
 }
 
 .admin-production-row-actions {
-  grid-column: 1 / -1;
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
+  justify-self: end;
+}
+
+.admin-production-row-actions .admin-production-button {
+  padding: 10px 16px;
+  font-size: 0.95rem;
 }
 
 .admin-production-button {
   border-radius: 10px;
   border: 1px solid transparent;
-  padding: 8px 14px;
-  font-weight: 600;
-  font-size: 0.85rem;
+  padding: 12px 22px;
+  font-weight: 700;
+  font-size: 1rem;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
@@ -650,17 +1004,17 @@
 .admin-production-button.primary {
   background: #2563eb;
   color: #fff;
-  box-shadow: 0 12px 22px -16px rgba(37, 99, 235, 0.6);
+  box-shadow: 0 16px 28px -18px rgba(37, 99, 235, 0.55);
 }
 
 .admin-production-button.primary:not(:disabled):hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px) scale(1.01);
 }
 
 .admin-production-button.ghost {
   background: #f8fafc;
   color: #1f2937;
-  border-color: rgba(148, 163, 184, 0.45);
+  border-color: rgba(148, 163, 184, 0.55);
 }
 
 .admin-production-button:disabled {
@@ -724,17 +1078,22 @@
   border: 1px solid rgba(148, 163, 184, 0.22);
 }
 
-.admin-serving-search {
-  display: grid;
-  gap: 6px;
-  min-width: min(320px, 100%);
-  flex: 1 1 360px;
+.admin-serving-ticket {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
 }
 
-.admin-serving-search label {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+.admin-serving-code {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #475569;
+  font-weight: 600;
+}
+
+.admin-serving-progress-code {
+  margin: 0;
+  font-size: 0.75rem;
   color: #64748b;
   font-weight: 600;
 }
@@ -742,8 +1101,8 @@
 .admin-serving-search-input {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 12px;
+  padding: 10px 14px;
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.32);
   background: #f8fafc;
@@ -861,25 +1220,48 @@
   animation: admin-serving-pulse 1s ease-out;
 }
 
-.admin-serving-card header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+.admin-serving-card-header-inline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 12px;
 }
 
-.admin-serving-ticket {
-  margin: 0;
-  display: flex;
+.admin-serving-header-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  color: #0f172a;
 }
 
-.admin-serving-code {
-  margin: 2px 0 0;
-  font-size: 0.78rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #64748b;
+.admin-serving-header-primary .admin-serving-code,
+.admin-serving-header-primary .admin-serving-progress-code {
   font-weight: 600;
+  color: #475569;
+}
+
+.admin-serving-header-meta {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+
+.admin-serving-time-group {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-serving-mini-card .admin-serving-time-group {
+  justify-items: start;
+  text-align: left;
 }
 
 .admin-serving-time {
@@ -887,11 +1269,28 @@
   color: #64748b;
 }
 
-.admin-serving-items {
-  margin: 0;
-  color: #1f2937;
-  line-height: 1.55;
-  font-size: 0.95rem;
+.admin-serving-elapsed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.admin-serving-items-inline {
+  justify-content: flex-start;
+  margin: 12px 0;
+  width: 100%;
+}
+
+.admin-serving-mini-card .admin-order-items-inline {
+  justify-content: flex-start;
+  margin: 8px 0;
 }
 
 .admin-serving-meta {
@@ -977,6 +1376,21 @@
   display: grid;
   gap: 6px;
   background: #f8fafc;
+}
+
+.admin-serving-mini-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: #1f2937;
+}
+
+.admin-serving-mini-header .admin-serving-code,
+.admin-serving-mini-header .admin-serving-progress-code {
+  font-weight: 600;
+  color: #475569;
 }
 
 .admin-serving-mini-card.highlight {
@@ -1082,27 +1496,33 @@
 .admin-payment-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
+  gap: clamp(12px, 2vw, 18px);
 }
 
 .admin-payment-summary-card {
-  background: #0f172a;
-  color: #f8fafc;
-  border-radius: 16px;
-  padding: 18px;
-  box-shadow: 0 18px 36px -28px rgba(15, 23, 42, 0.5);
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  padding: clamp(16px, 2.2vw, 24px);
+  box-shadow: 0 18px 32px -28px rgba(15, 23, 42, 0.18);
+  display: grid;
+  gap: 6px;
 }
 
 .admin-payment-summary-title {
-  margin: 0 0 6px;
-  font-size: 0.95rem;
-  opacity: 0.72;
+  margin: 0;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
 }
 
 .admin-payment-summary-value {
   margin: 0;
-  font-size: 1.7rem;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
   font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
 }
 
 .admin-payment-layout {
@@ -1381,19 +1801,6 @@
   box-shadow: 0 18px 32px -26px rgba(15, 23, 42, 0.14);
 }
 
-.admin-payment-recent header h3 {
-  margin: 0 0 12px;
-  font-size: 1.1rem;
-}
-
-.admin-payment-recent ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 12px;
-}
-
 .admin-payment-actions {
   display: grid;
   gap: clamp(8px, 1.4vw, 14px);
@@ -1495,12 +1902,13 @@
   background: #ffffff;
   border-radius: 18px;
   padding: 20px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   box-shadow: 0 18px 32px -24px rgba(15, 23, 42, 0.16);
   position: sticky;
   top: clamp(20px, 3vw, 56px);
-  max-height: calc(100vh - clamp(160px, 24vh, 280px));
+  height: calc(100vh - clamp(160px, 24vh, 280px));
   overflow: hidden;
 }
 
@@ -1518,19 +1926,20 @@
   gap: clamp(8px, 1.4vw, 12px);
   overflow-y: auto;
   padding-right: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .admin-payment-list-item {
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.35);
-  padding: clamp(10px, 1.2vw, 16px);
-  display: grid;
-  grid-template-columns: clamp(64px, 8vw, 88px) minmax(0, 1fr) auto;
-  gap: clamp(10px, 1.8vw, 18px);
+  padding: clamp(8px, 1.2vw, 12px);
+  display: flex;
   align-items: center;
+  justify-content: center;
   background: #f8fafc;
   cursor: pointer;
-  text-align: left;
+  text-align: center;
   transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
@@ -1554,11 +1963,11 @@
 .admin-payment-ticket.badge {
   display: grid;
   place-items: center;
-  width: clamp(60px, 7vw, 82px);
-  height: clamp(60px, 7vw, 82px);
-  border-radius: 20px;
-  background: linear-gradient(160deg, rgba(37, 99, 235, 0.18), rgba(37, 99, 235, 0));
-  font-size: clamp(1.6rem, 3.4vw, 2.4rem);
+  width: clamp(52px, 6vw, 72px);
+  height: clamp(52px, 6vw, 72px);
+  border-radius: 16px;
+  background: linear-gradient(160deg, rgba(37, 99, 235, 0.16), rgba(37, 99, 235, 0));
+  font-size: clamp(1.45rem, 3vw, 2rem);
   letter-spacing: 0.02em;
   color: #0f172a;
 }
@@ -1570,43 +1979,18 @@
 }
 
 .admin-payment-ticket.large {
-  font-size: clamp(2.3rem, 4vw, 3.1rem);
+  font-size: clamp(2rem, 3.6vw, 2.6rem);
   letter-spacing: 0.015em;
 }
 
 .admin-payment-list-item .admin-payment-ticket {
   display: grid;
   place-items: center;
-  width: clamp(64px, 8vw, 88px);
-  height: clamp(64px, 8vw, 88px);
-  border-radius: 20px;
+  width: clamp(54px, 7vw, 74px);
+  height: clamp(54px, 7vw, 74px);
+  border-radius: 16px;
   background: linear-gradient(160deg, rgba(37, 99, 235, 0.18), rgba(37, 99, 235, 0));
-  font-size: clamp(1.8rem, 3.6vw, 2.4rem);
-}
-
-.admin-payment-list-info {
-  display: grid;
-  gap: 4px;
-}
-
-.admin-payment-list-info .admin-payment-code {
-  margin: 0;
-  color: #64748b;
-  font-size: 0.8rem;
-}
-
-.admin-payment-list-info .admin-payment-items {
-  margin: 0;
-  color: #475569;
-  font-size: 0.85rem;
-  line-height: 1.35;
-}
-
-.admin-payment-list-meta {
-  display: grid;
-  gap: 8px;
-  justify-items: end;
-  text-align: right;
+  font-size: clamp(1.6rem, 3vw, 2rem);
 }
 
 .admin-payment-main {
@@ -1648,17 +2032,95 @@
   text-align: right;
 }
 
-.admin-payment-total-box span:first-child {
-  font-size: clamp(0.95rem, 1.2vw, 1.05rem);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #475569;
+.admin-payment-breakdown-panel {
+  display: grid;
+  gap: 12px;
+  padding: clamp(12px, 1.6vw, 18px);
+  border-radius: 14px;
+  background: rgba(241, 245, 249, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  text-align: left;
 }
 
-.admin-payment-total-box strong {
-  font-size: clamp(1.8rem, 3.4vw, 2.4rem);
+.admin-payment-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-payment-breakdown-row.prominent {
+  align-items: flex-end;
+  padding-bottom: 4px;
+  border-bottom: 2px solid rgba(15, 23, 42, 0.25);
+}
+
+.admin-payment-breakdown-label {
+  margin: 0;
+  font-size: clamp(1.1rem, 1.6vw, 1.4rem);
+  font-weight: 600;
   color: #0f172a;
-  line-height: 1.1;
+  letter-spacing: 0.04em;
+}
+
+.admin-payment-cash-due {
+  margin: 0;
+  font-size: clamp(2.2rem, 4vw, 3.2rem);
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-payment-voucher-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.admin-payment-adjust {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: #ffffff;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1f2937;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.admin-payment-adjust:hover {
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.4);
+}
+
+.admin-payment-adjust:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.admin-payment-voucher-count {
+  font-size: clamp(1rem, 1.4vw, 1.2rem);
+  color: #1f2937;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-payment-breakdown-divider {
+  border: none;
+  border-top: 2px solid #1f2937;
+  margin: 0;
+}
+
+.admin-payment-breakdown-total {
+  margin: 0;
+  font-size: clamp(1.2rem, 2vw, 1.6rem);
+  font-weight: 700;
+  color: #0f172a;
+  text-align: right;
 }
 
 .admin-payment-detail-body {
@@ -1680,6 +2142,23 @@
   display: grid;
   gap: 6px;
   color: #1f2937;
+}
+
+.admin-payment-detail-items .admin-order-items-inline {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.admin-payment-detail-items .admin-production-items-card {
+  flex: 1 1 auto;
+}
+
+.admin-payment-items-inline {
+  justify-content: flex-start;
+}
+
+.admin-payment-list-info .admin-order-items-inline {
+  margin-top: 8px;
 }
 
 .admin-payment-detail-placeholder {
@@ -1740,24 +2219,126 @@
   font-size: 0.9rem;
 }
 
+
 .admin-payment-recent {
   display: grid;
-  gap: 12px;
+  gap: 18px;
 }
 
-.admin-payment-recent li {
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
-}
-
-.admin-payment-recent-info {
+.admin-payment-recent-header {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.admin-payment-recent-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.admin-payment-recent-sub {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.admin-payment-recent ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.admin-payment-recent-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  padding: clamp(16px, 1.8vw, 22px);
+  box-shadow: 0 16px 32px -28px rgba(15, 23, 42, 0.2);
+  display: grid;
+  gap: clamp(10px, 1.4vw, 16px);
+  transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-payment-recent-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(37, 99, 235, 0.36);
+  box-shadow: 0 24px 40px -26px rgba(37, 99, 235, 0.18);
+}
+
+.admin-payment-recent-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-payment-recent-ticket {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: clamp(0.95rem, 1.5vw, 1.05rem);
+  letter-spacing: 0.06em;
+}
+
+.admin-payment-recent-meta {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  text-align: right;
+}
+
+.admin-payment-recent-total {
+  font-weight: 700;
+  font-size: clamp(1.2rem, 2vw, 1.4rem);
+  color: #0f172a;
+}
+
+.admin-payment-recent-items {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.admin-payment-recent-identifiers {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: clamp(8px, 1.4vw, 14px);
+}
+
+.admin-payment-recent-identifiers div {
+  display: grid;
   gap: 2px;
 }
 
-.admin-payment-recent-info small {
-  color: #64748b;
-  font-size: 0.78rem;
+.admin-payment-recent-identifiers dt {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.admin-payment-recent-identifiers dd {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.admin-payment-recent-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .admin-payment-revert {
@@ -1768,11 +2349,23 @@
   padding: 6px 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .admin-payment-revert:hover {
   background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(37, 99, 235, 0.5);
+}
+
+.admin-payment-recent-empty {
+  margin: 0;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px dashed rgba(148, 163, 184, 0.5);
+  color: #64748b;
+  font-size: 0.9rem;
+  text-align: center;
+  background: rgba(248, 250, 252, 0.6);
 }
 
 .admin-payment-main > .admin-payment-detail-placeholder {
@@ -1851,6 +2444,500 @@
 
 .admin-payment-stop:hover {
   background: #1d4ed8;
+}
+
+.admin-cash-audit-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.admin-cash-audit-input-column {
+  display: grid;
+  gap: 24px;
+}
+
+.admin-input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #cbd5f5;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  background: #ffffff;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-input:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.admin-input--compact {
+  max-width: 128px;
+  text-align: right;
+}
+
+.admin-textarea {
+  width: 100%;
+  min-height: 140px;
+  border-radius: 12px;
+  border: 1px solid #cbd5f5;
+  padding: 12px;
+  font-size: 0.95rem;
+  background: #ffffff;
+  color: #0f172a;
+  resize: vertical;
+}
+
+.admin-textarea:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.admin-cash-audit-group-summary {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.admin-cash-audit-group-summary div {
+  display: grid;
+  gap: 4px;
+  text-align: right;
+}
+
+.admin-cash-audit-group-summary dt {
+  font-size: 0.75rem;
+  color: #64748b;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.admin-cash-audit-group-summary dd {
+  margin: 0;
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.95rem;
+}
+
+.admin-cash-audit-table tbody th {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.admin-cash-audit-table tbody td {
+  vertical-align: middle;
+}
+
+.admin-cash-audit-table tfoot th,
+.admin-cash-audit-table tfoot td {
+  background: #f8fafc;
+  font-weight: 600;
+  border-top: 1px solid #e2e8f0;
+}
+
+.admin-cash-audit-count-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-cash-audit-count-suffix {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.admin-text-right {
+  text-align: right;
+}
+
+.admin-cash-audit-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-cash-audit-total-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.admin-cash-audit-actions {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-cash-audit-note-field {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-cash-audit-note-field label {
+  font-size: 0.8rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.admin-cash-audit-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.admin-cash-audit-buttons button {
+  min-width: 160px;
+}
+
+.admin-cash-audit-layout {
+  display: grid;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+@media (min-width: 1081px) {
+  .admin-cash-audit-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  }
+}
+
+.admin-cash-audit-input-column {
+  display: grid;
+  gap: 24px;
+}
+
+.admin-cash-audit-config {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-cash-audit-shift-group {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.admin-cash-audit-shift-group legend {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.admin-cash-audit-shift-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.admin-cash-audit-shift-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #d4d7e6;
+  background: #ffffff;
+  font-weight: 600;
+  color: #1f2937;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.admin-cash-audit-shift-option.is-active {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+  box-shadow: 0 16px 32px -28px rgba(37, 99, 235, 0.6);
+  color: #1d4ed8;
+}
+
+.admin-cash-audit-shift-option input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.admin-cash-audit-voucher-field {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-cash-audit-helper {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.admin-cash-audit-voucher-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+
+.admin-cash-audit-voucher-total strong {
+  font-size: 1rem;
+}
+
+.admin-cash-audit-voucher-usage {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, rgba(191, 219, 254, 0.16) 100%);
+  display: grid;
+  gap: 4px;
+  color: #1e293b;
+}
+
+.admin-cash-audit-voucher-usage strong {
+  font-size: 1.1rem;
+  color: #1d4ed8;
+}
+
+.admin-cash-audit-voucher-usage-amount {
+  font-size: 0.85rem;
+  color: #334155;
+}
+
+.admin-cash-audit-shift-summary {
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #f8fafc;
+  display: grid;
+  gap: 12px;
+}
+
+.admin-cash-audit-shift-summary > div {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-cash-audit-summary-label {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.admin-cash-audit-shift-summary strong {
+  font-size: clamp(1.2rem, 2.6vw, 1.6rem);
+  color: #0f172a;
+}
+
+.admin-cash-audit-summary-meta {
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.admin-cash-audit-feedback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  color: #1e293b;
+}
+
+.admin-cash-audit-feedback-muted {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.admin-cash-audit-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.admin-cash-audit-report {
+  display: grid;
+  gap: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 24px 48px -36px rgba(15, 23, 42, 0.22);
+  padding: 24px;
+}
+
+.admin-cash-audit-report-header {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-cash-audit-report-header h3 {
+  font-size: clamp(1.8rem, 4vw, 2.2rem);
+  margin: 0;
+  color: #0f172a;
+}
+
+.admin-cash-audit-report-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.admin-cash-audit-timestamp {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.admin-cash-audit-shift-label {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.admin-payment-voucher-summary {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid #bfdbfe;
+  background: linear-gradient(180deg, rgba(219, 234, 254, 0.6) 0%, rgba(239, 246, 255, 0.95) 100%);
+  display: grid;
+  gap: 6px;
+}
+
+.admin-payment-voucher-summary-label {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2563eb;
+}
+
+.admin-payment-voucher-summary-value {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.8vw, 1.8rem);
+  font-weight: 700;
+  color: #1d4ed8;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.admin-payment-voucher-summary-amount {
+  font-size: clamp(0.85rem, 2vw, 1rem);
+  color: #334155;
+}
+
+.admin-cash-audit-report-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.admin-cash-audit-report-grid article {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-cash-audit-report-grid h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.admin-cash-audit-report-grid table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-cash-audit-report-grid th {
+  text-align: left;
+  padding: 8px 0;
+  font-size: 0.75rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.admin-cash-audit-report-grid td {
+  padding: 8px 0;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.9rem;
+  color: #1e293b;
+}
+
+.admin-cash-audit-report-grid td:nth-child(2) {
+  width: 90px;
+}
+
+.admin-cash-audit-report-grid td:nth-child(2),
+.admin-cash-audit-report-grid td:nth-child(3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-cash-audit-report-grid tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-cash-audit-note-preview {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-cash-audit-note-preview h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.admin-cash-audit-note-preview p {
+  margin: 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px dashed #cbd5f5;
+  background: rgba(241, 245, 249, 0.75);
+  min-height: 72px;
+  white-space: pre-wrap;
+  color: #1e293b;
+}
+
+@media (max-width: 1080px) {
+  .admin-cash-audit-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-cash-audit-buttons {
+    justify-content: stretch;
+  }
+
+  .admin-cash-audit-buttons button {
+    flex: 1 1 160px;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-cash-audit-report-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 1023px) {

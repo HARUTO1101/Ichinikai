@@ -67,6 +67,27 @@ npm run build
 - エミュレーター環境を利用する場合は、`.env.local` に `VITE_USE_FIREBASE_EMULATORS=true` を設定し、ローカルでAuth (9099) / Firestore (8080) を起動します。
 - モックデータでUIを確認したい場合は、`.env.local`に`VITE_USE_MOCK_DATA=true`を設定してください。Firestoreへの書き込みは行われず、ローカルストレージに保存されるダミー注文が利用されます。
 
+### 運営ロールのカスタムクレーム付与
+
+運営者（admin）やスタッフ（staff）といった権限はFirebase Authenticationのカスタムクレームで管理します。
+
+1. Firebaseコンソールからサービスアカウント秘密鍵（JSON）をダウンロードし、`webapp/tools/serviceAccount.json` として配置します（詳細は `tools/README.md` を参照）。
+2. 依存パッケージに `firebase-admin` が含まれていることを確認し、`npm install` 済みであることを前提とします。
+3. 以下のコマンドでロールを付与／削除できます。
+
+```powershell
+# 例: UIDにadminロールを付与し、kitchenロールを削除
+node scripts/setCustomClaims.js --uid "UID_HERE" --set admin --unset kitchen
+
+# 例: 現在のクレームを確認
+node scripts/setCustomClaims.js --uid "UID_HERE" --show
+
+# サービスアカウントを別名で置く場合
+FIREBASE_SERVICE_ACCOUNT_PATH=./secrets/your-key.json node scripts/setCustomClaims.js --uid "UID_HERE" --set staff
+```
+
+更新後は、該当ユーザーに再ログインしてもらうか `user.getIdToken(true)` を呼び出すことで新しいクレームがクライアントに反映されます。
+
 ## ディレクトリ構成（抜粋）
 
 ```

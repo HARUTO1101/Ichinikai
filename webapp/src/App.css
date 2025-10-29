@@ -10,6 +10,7 @@ body {
   min-height: 100%;
   margin: 0;
   overflow-x: hidden;
+  background: #f8fafc;
 }
 
 #root {
@@ -293,6 +294,44 @@ body {
   word-break: break-word;
 }
 
+.menu-card-allergens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menu-card-allergen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.menu-card-allergen-icon {
+  width: clamp(48px, 8vw, 64px);
+  height: clamp(48px, 8vw, 64px);
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  box-shadow: 0 10px 20px -14px rgba(15, 23, 42, 0.45);
+}
+
+.menu-card-allergen-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .menu-card-footer {
   margin-top: auto;
 }
@@ -418,7 +457,7 @@ body {
 }
 
 .receipt-header {
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #64748b;
@@ -431,8 +470,49 @@ body {
 }
 
 .receipt-item-name {
-  font-size: 1rem;
+  font-size: 1.2rem;
   color: #0f172a;
+}
+
+.receipt-item-info {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.receipt-item-allergens {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.receipt-item-allergen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem;
+  border-radius: 16px;
+  background: rgba(148, 163, 184, 0.16);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.receipt-item-allergen-icon {
+  width: clamp(36px, 6vw, 48px);
+  height: clamp(36px, 6vw, 48px);
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+}
+
+.receipt-item-allergen-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .receipt-item-qty,
@@ -445,16 +525,18 @@ body {
 }
 
 .receipt-item-qty {
+  font-size: 1.2rem;
   text-align: center;
 }
 
 .receipt-item-subtotal,
 .receipt-total span:last-child {
+  font-size: 1.3rem;
   text-align: right;
 }
 
 .receipt-total {
-  font-size: 1.15rem;
+  font-size: 1.5rem;
   font-weight: 700;
 }
 
@@ -550,21 +632,7 @@ body {
   flex-direction: column;
   gap: 0.55rem;
   text-align: left;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.2s ease, border 0.2s ease;
-}
-
-.order-history-item:hover,
-.order-history-item:focus-visible {
-  transform: translateY(-1px);
-  box-shadow: 0 18px 30px -35px rgba(var(--color-primary-rgb), 0.55);
-  border-color: rgba(var(--color-primary-rgb), 0.4);
-  outline: none;
-}
-
-.order-history-item:disabled {
-  opacity: 0.7;
-  cursor: progress;
+  transition: border 0.2s ease;
 }
 
 .order-history-row {
@@ -617,6 +685,26 @@ body {
   min-height: 100%;
 }
 
+.completion-call-number-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  padding: 0.85rem 1rem;
+}
+
+.completion-call-number {
+  font-family: 'Fira Code', 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #0f172a;
+}
+
 .payment-state {
   display: flex;
   align-items: center;
@@ -627,9 +715,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.35rem 0.85rem;
+  padding: 0.5rem 1.1rem;
   border-radius: 999px;
-  font-size: 0.95rem;
+  font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   background: rgba(148, 163, 184, 0.2);
@@ -758,6 +846,9 @@ body {
 
 .completion-progress-step .completion-progress-label {
   font-size: 0.95rem;
+  color: #475569;
+  transition: color 0.2s ease;
+  white-space: pre-line;
 }
 
 .completion-progress-step.done .completion-progress-label {
@@ -769,36 +860,113 @@ body {
 }
 
 .completion-ready-notice {
-  margin: 1rem 0 0;
-  padding: 0.9rem 1rem;
-  border-radius: 14px;
-  background: rgba(34, 197, 94, 0.14);
-  color: #166534;
-  font-weight: 600;
-  line-height: 1.6;
-  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.18);
+  margin: 1.2rem 0 0;
+  padding: clamp(1rem, 2vw, 1.35rem) clamp(1.1rem, 2.4vw, 1.6rem);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.16), rgba(59, 130, 246, 0.08));
+  color: #065f46;
+  font-weight: 500;
+  line-height: 1.65;
+  box-shadow:
+    0 28px 48px -32px rgba(22, 163, 74, 0.35),
+    inset 0 0 0 1px rgba(22, 163, 74, 0.25);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: clamp(0.9rem, 1.8vw, 1.4rem);
+  align-items: center;
 }
 
-.completion-ticket-value,
+.completion-ready-notice.preview {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(96, 165, 250, 0.12));
+  color: #1d4ed8;
+  box-shadow:
+    0 28px 48px -32px rgba(37, 99, 235, 0.32),
+    inset 0 0 0 1px rgba(37, 99, 235, 0.28);
+}
+
+.completion-ready-icon {
+  width: clamp(56px, 8vw, 72px);
+  height: clamp(56px, 8vw, 72px);
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(150deg, #16a34a, #22c55e);
+  position: relative;
+  box-shadow: 0 20px 32px -22px rgba(22, 163, 74, 0.55);
+}
+
+.completion-ready-notice.preview .completion-ready-icon {
+  background: linear-gradient(150deg, #2563eb, #60a5fa);
+  box-shadow: 0 20px 32px -22px rgba(37, 99, 235, 0.55);
+}
+
+.completion-ready-icon::after {
+  content: '';
+  position: absolute;
+  inset: 10%;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.18);
+  filter: blur(12px);
+  z-index: 0;
+}
+
+.completion-ready-icon svg {
+  width: clamp(24px, 4vw, 32px);
+  height: clamp(24px, 4vw, 32px);
+  position: relative;
+  z-index: 1;
+}
+
+.completion-ready-copy {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.completion-ready-title {
+  margin: 0;
+  font-size: clamp(1.05rem, 2vw, 1.25rem);
+  font-weight: 700;
+  color: currentColor;
+}
+
+.completion-ready-message {
+  margin: 0;
+  font-size: 0.96rem;
+  color: color-mix(in srgb, currentColor 90%, #0f172a 10%);
+}
+
+.completion-ready-preview-tag {
+  justify-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: currentColor;
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  padding: 0.25rem 0.85rem;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+
 .completion-order-id-value {
   font-family: 'Fira Code', 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     'Liberation Mono', 'Courier New', monospace;
-  font-size: 1.8rem;
+  font-size: 1.4rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.8rem 1.1rem;
+  padding: 0.65rem 0.9rem;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(15, 23, 42, 0.12);
   color: #0f172a;
   overflow-wrap: anywhere;
-}
-
-.completion-ticket-value {
-  font-size: 2rem;
 }
 
 .completion-qr-block {
@@ -1028,7 +1196,11 @@ body {
     gap: 0.75rem;
   }
 
-  .completion-ticket-value,
+  .completion-call-number {
+    font-size: 2rem;
+    letter-spacing: 0.12em;
+  }
+
   .completion-order-id-value {
     font-size: 1.6rem;
     letter-spacing: 0.1em;
@@ -1077,6 +1249,7 @@ body {
 
   .completion-progress-step .completion-progress-label {
     font-size: 0.9rem;
+    white-space: pre-line;
   }
 }
 
@@ -1118,6 +1291,7 @@ body {
   .completion-progress-step .completion-progress-label {
     font-size: 0.82rem;
     line-height: 1.3;
+    white-space: pre-line;
   }
 
   .quantity-stepper {
@@ -1172,7 +1346,11 @@ body {
     height: 180px;
   }
 
-  .completion-ticket-value,
+  .completion-call-number {
+    font-size: 1.7rem;
+    letter-spacing: 0.1em;
+  }
+
   .completion-order-id-value {
     font-size: 1.4rem;
     letter-spacing: 0.08em;

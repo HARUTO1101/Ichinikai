@@ -5,8 +5,11 @@ import {
   fetchOrderDetailFirebase,
   fetchKitchenOrdersFirebase,
   subscribeNewOrdersFirebase,
+  subscribeOrdersFirebase,
+  subscribeOrderLookupFirebase,
   searchOrderByTicketOrIdFirebase,
   updateOrderStatusFirebase,
+  updateOrderPlatingFirebase,
 } from './orders/firebase'
 import {
   createOrderMock,
@@ -15,11 +18,14 @@ import {
   fetchOrderDetailMock,
   fetchKitchenOrdersMock,
   subscribeNewOrdersMock,
+  subscribeOrdersMock,
+  subscribeOrderLookupMock,
   getMockOrders,
   resetMockData,
   searchOrderByTicketOrIdMock,
   seedMockOrders,
   updateOrderStatusMock,
+  updateOrderPlatingMock,
 } from './orders/mock'
 
 const firebaseConfigValues = [
@@ -47,6 +53,9 @@ const fetchOrderDetailImpl = useMock
 const updateOrderStatusImpl = useMock
   ? updateOrderStatusMock
   : updateOrderStatusFirebase
+const updateOrderPlatingImpl = useMock
+  ? updateOrderPlatingMock
+  : updateOrderPlatingFirebase
 const searchOrderByTicketOrIdImpl = useMock
   ? searchOrderByTicketOrIdMock
   : searchOrderByTicketOrIdFirebase
@@ -57,6 +66,10 @@ const fetchKitchenOrdersImpl = useMock
 const subscribeNewOrdersImpl = useMock
   ? subscribeNewOrdersMock
   : subscribeNewOrdersFirebase
+const subscribeOrdersImpl = useMock ? subscribeOrdersMock : subscribeOrdersFirebase
+const subscribeOrderLookupImpl = useMock
+  ? subscribeOrderLookupMock
+  : subscribeOrderLookupFirebase
 
 export const isMockDataEnabled = useMock
 
@@ -75,6 +88,7 @@ export const fetchOrderByTicket = fetchOrderByTicketImpl
 export const fetchOrderDetail = fetchOrderDetailImpl
 
 export const updateOrderStatus = updateOrderStatusImpl
+export const updateOrderPlating = updateOrderPlatingImpl
 
 export const searchOrderByTicketOrId = searchOrderByTicketOrIdImpl
 
@@ -83,3 +97,7 @@ export const exportOrdersCsv = exportOrdersCsvImpl
 export const fetchKitchenOrders = fetchKitchenOrdersImpl
 
 export const subscribeNewOrders = subscribeNewOrdersImpl
+
+export const subscribeOrders = subscribeOrdersImpl
+
+export const subscribeOrderLookup = subscribeOrderLookupImpl

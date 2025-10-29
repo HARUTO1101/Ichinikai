@@ -1,13 +1,57 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
-import { getInitialOrders, type OrderRow } from './adminOrdersData'
+import { useOrdersSubscription } from '../../../hooks/useOrdersSubscription'
+import { updateOrderStatus } from '../../../services/orders'
+import { getOrderConfirmationCode, mapOrderDetailToRow, type OrderRow } from './adminOrdersData'
+import { buildOrderItemEntries, OrderItemsInline } from './adminOrderItems'
+
+function resolveOrderTimestamp(createdAt: string, reference: Date): Date | null {
+  const match = createdAt.match(/^(\d{1,2}):(\d{2})$/)
+  if (!match) return null
+
+  const [, hoursText, minutesText] = match
+  const hours = Number.parseInt(hoursText, 10)
+  const minutes = Number.parseInt(minutesText, 10)
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null
+
+  const resolved = new Date(reference)
+  resolved.setHours(hours, minutes, 0, 0)
+
+  if (resolved.getTime() > reference.getTime()) {
+    resolved.setDate(resolved.getDate() - 1)
+  }
+
+  return resolved
+}
+
+function formatElapsedLabel(createdAt: string, reference: Date): string | null {
+  const orderTimestamp = resolveOrderTimestamp(createdAt, reference)
+  if (!orderTimestamp) return null
+
+  const diffMs = reference.getTime() - orderTimestamp.getTime()
+  if (diffMs < 0) return null
+
+  const totalMinutes = Math.floor(diffMs / 60000)
+  if (totalMinutes < 1) return '1分未満'
+
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+
+  if (hours === 0) return `${totalMinutes}分経過`
+  if (minutes === 0) return `${hours}時間経過`
+  return `${hours}時間${minutes}分経過`
+}
 
 export function AdminServingView() {
-  const [orders, setOrders] = useState<OrderRow[]>(getInitialOrders())
+  const { orders: rawOrders, loading, error } = useOrdersSubscription()
+  const orders = useMemo(() => rawOrders.map(mapOrderDetailToRow), [rawOrders])
   const [searchQuery, setSearchQuery] = useState('')
   const [isScannerOpen, setScannerOpen] = useState(false)
   const [scannerError, setScannerError] = useState<string | null>(null)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const [now, setNow] = useState(() => new Date())
+  const [mutatingId, setMutatingId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
 
@@ -22,6 +66,7 @@ export function AdminServingView() {
               order.items,
               order.progress,
               order.payment,
+              getOrderConfirmationCode(order.id),
             ]
 
             return haystacks
@@ -36,7 +81,11 @@ export function AdminServingView() {
     () =>
       filteredOrders
         .filter((order) => order.progress === '調理済み')
-        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1)),
+        .sort((a, b) => {
+          const aTime = a.createdAtDate?.getTime() ?? 0
+          const bTime = b.createdAtDate?.getTime() ?? 0
+          return aTime - bTime
+        }),
     [filteredOrders],
   )
 
@@ -44,7 +93,11 @@ export function AdminServingView() {
     () =>
       filteredOrders
         .filter((order) => order.progress === 'クローズ')
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+        .sort((a, b) => {
+          const aTime = a.createdAtDate?.getTime() ?? 0
+          const bTime = b.createdAtDate?.getTime() ?? 0
+          return bTime - aTime
+        }),
     [filteredOrders],
   )
 
@@ -52,7 +105,11 @@ export function AdminServingView() {
     () =>
       filteredOrders
         .filter((order) => order.progress === '受注済み')
-        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1)),
+        .sort((a, b) => {
+          const aTime = a.createdAtDate?.getTime() ?? 0
+          const bTime = b.createdAtDate?.getTime() ?? 0
+          return aTime - bTime
+        }),
     [filteredOrders],
   )
 
@@ -62,16 +119,56 @@ export function AdminServingView() {
       delivered: deliveredList.length,
       upcoming: upcomingList.length,
     }),
-    [readyList.length, deliveredList.length, upcomingList.length],
+    [readyList, deliveredList, upcomingList],
   )
 
-  const markAsDelivered = (id: string) => {
-    setOrders((prev) => prev.map((order) => (order.id === id ? { ...order, progress: 'クローズ' } : order)))
-  }
+  const markAsDelivered = useCallback(
+    async (order: OrderRow) => {
+      setMutatingId(order.id)
+      setActionError(null)
+      try {
+        await updateOrderStatus(order.id, order.ticket, {
+          progress: 'クローズ',
+          payment: order.payment,
+        })
+      } catch (err) {
+        console.error('注文を受け渡し済みに更新できませんでした', err)
+        setActionError('受け渡し状況の更新に失敗しました。通信環境をご確認ください。')
+      } finally {
+        setMutatingId(null)
+      }
+    },
+    [],
+  )
 
-  const revertToReady = (id: string) => {
-    setOrders((prev) => prev.map((order) => (order.id === id ? { ...order, progress: '調理済み' } : order)))
-  }
+  const revertToReady = useCallback(
+    async (order: OrderRow) => {
+      setMutatingId(order.id)
+      setActionError(null)
+      try {
+        await updateOrderStatus(order.id, order.ticket, {
+          progress: '調理済み',
+          payment: order.payment,
+        })
+      } catch (err) {
+        console.error('受け渡し済みから戻せませんでした', err)
+        setActionError('注文を調理済みに戻せませんでした。もう一度お試しください。')
+      } finally {
+        setMutatingId(null)
+      }
+    },
+    [],
+  )
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(new Date())
+    }, 60000)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [])
 
   useEffect(() => {
     if (!normalizedQuery) {
@@ -103,6 +200,8 @@ export function AdminServingView() {
     setScannerError(null)
   }
 
+  const describeElapsed = useCallback((createdAt: string) => formatElapsedLabel(createdAt, now), [now])
+
   const handleScanDetected = (value: string) => {
     const text = value.trim()
     if (!text) return
@@ -111,6 +210,7 @@ export function AdminServingView() {
       (order) =>
         order.ticket.toLowerCase() === text.toLowerCase() ||
         order.id.toLowerCase() === text.toLowerCase() ||
+        getOrderConfirmationCode(order.id).toLowerCase() === text.toLowerCase() ||
         order.callNumber.toString() === text,
     )
 
@@ -124,6 +224,10 @@ export function AdminServingView() {
     setScannerOpen(false)
   }
 
+  if (loading) {
+    return <p>注文データを読み込み中です…</p>
+  }
+
   return (
     <div className="admin-serving-page">
       <section className="admin-serving-controls" aria-label="注文検索">
@@ -135,7 +239,7 @@ export function AdminServingView() {
               type="search"
               value={searchQuery}
               onChange={handleSearchChange}
-              placeholder="呼出番号・確認コード・メニューなどで検索"
+              placeholder="呼出番号・確認コード（注文番号末尾）・メニューなどで検索"
               aria-describedby="serving-search-hint"
             />
             {searchQuery && (
@@ -178,6 +282,17 @@ export function AdminServingView() {
         </div>
       </section>
 
+      {error && (
+        <p className="admin-error" role="alert">
+          注文データの取得に失敗しました。ページを再読み込みしてください。
+        </p>
+      )}
+      {actionError && (
+        <p className="admin-error" role="alert">
+          {actionError}
+        </p>
+      )}
+
       {searchQuery && filteredOrders.length === 0 && (
         <p className="admin-serving-search-empty" role="status">
           「{searchQuery}」に一致する注文は見つかりませんでした。
@@ -191,40 +306,55 @@ export function AdminServingView() {
             <p>調理済みの注文です。呼び出して番号札と照合してください。</p>
           </header>
           <div className="admin-serving-list">
-            {readyList.map((order) => (
-              <article
-                key={order.id}
-                className={`admin-serving-card${order.id === highlightedId ? ' highlight' : ''}`}
-                data-order-id={order.id}
-              >
-                <header>
-                  <div>
-                    <p
-                      className="admin-serving-ticket"
-                      aria-label={`呼出番号 ${order.callNumber}`}
-                    >
-                      <span className="admin-payment-ticket badge">{order.callNumber}</span>
-                    </p>
-                    <p className="admin-serving-code">確認コード {order.ticket}</p>
-                  </div>
-                  <span className="admin-serving-time">{order.createdAt}</span>
-                </header>
-                <p className="admin-serving-items">{order.items}</p>
-                <footer>
-                  <div className="admin-serving-meta">
-                    <span className={`admin-serving-payment ${order.payment === '支払い済み' ? 'paid' : 'unpaid'}`}>
-                      {order.payment}
-                    </span>
-                    <span className="admin-serving-total">¥{order.total.toLocaleString()}</span>
-                  </div>
-                  <div className="admin-serving-actions">
-                    <button type="button" className="admin-serving-button primary" onClick={() => markAsDelivered(order.id)}>
-                      受け渡し完了
-                    </button>
-                  </div>
-                </footer>
-              </article>
-            ))}
+            {readyList.map((order) => {
+              const confirmationCode = getOrderConfirmationCode(order.id)
+              const elapsed = describeElapsed(order.createdAt)
+              const itemEntries = buildOrderItemEntries(order)
+              return (
+                <article
+                  key={order.id}
+                  className={`admin-serving-card${order.id === highlightedId ? ' highlight' : ''}`}
+                  data-order-id={order.id}
+                >
+                  <header className="admin-serving-card-header-inline">
+                    <div className="admin-serving-header-primary">
+                      <span className="admin-serving-ticket" aria-label={`呼出番号 ${order.callNumber}`}>
+                        <span className="admin-payment-ticket badge">{order.callNumber}</span>
+                      </span>
+                      <span className="admin-serving-code">確認コード {confirmationCode}</span>
+                      <span className="admin-serving-progress-code">進捗コード {order.ticket}</span>
+                    </div>
+                    <div className="admin-serving-header-meta">
+                      <time dateTime={order.createdAt} className="admin-serving-time">
+                        {order.createdAt}
+                      </time>
+                      {elapsed && <span className="admin-serving-elapsed">{elapsed}</span>}
+                    </div>
+                  </header>
+                  {itemEntries.length > 0 && (
+                    <OrderItemsInline
+                      entries={itemEntries}
+                      totalAriaLabel="商品点数"
+                      variant="compact"
+                      className="admin-serving-items-inline"
+                    />
+                  )}
+                  <footer>
+                    <div className="admin-serving-meta">
+                      <span className={`admin-serving-payment ${order.payment === '支払い済み' ? 'paid' : 'unpaid'}`}>
+                        {order.payment}
+                      </span>
+                      <span className="admin-serving-total">¥{order.total.toLocaleString()}</span>
+                    </div>
+                    <div className="admin-serving-actions">
+                      <button type="button" className="admin-serving-button primary" onClick={() => markAsDelivered(order)} disabled={mutatingId === order.id}>
+                        受け渡し完了
+                      </button>
+                    </div>
+                  </footer>
+                </article>
+              )
+            })}
             {readyList.length === 0 && (
               <p className="admin-serving-empty">お渡し待ちの注文はありません。</p>
             )}
@@ -238,34 +368,50 @@ export function AdminServingView() {
               <p>受注済みの注文です。進捗に合わせて盛り付けラインへ共有しましょう。</p>
             </header>
             <div className="admin-serving-list compact">
-              {upcomingList.map((order) => (
-                <article
-                  key={order.id}
-                  className={`admin-serving-mini-card${order.id === highlightedId ? ' highlight' : ''}`}
-                  data-order-id={order.id}
-                >
-                  <div>
-                    <p
-                      className="admin-serving-ticket"
-                      aria-label={`呼出番号 ${order.callNumber}`}
-                    >
-                      <span className="admin-payment-ticket badge small">{order.callNumber}</span>
-                    </p>
-                    <p className="admin-serving-code">確認コード {order.ticket}</p>
-                  </div>
-                  <p className="admin-serving-items">{order.items}</p>
-                  <span className="admin-serving-time">{order.createdAt}</span>
-                  <div className="admin-serving-mini-actions">
-                    <button
-                      type="button"
-                      className="admin-serving-button primary small"
-                      onClick={() => markAsDelivered(order.id)}
-                    >
-                      受け渡し完了
-                    </button>
-                  </div>
-                </article>
-              ))}
+              {upcomingList.map((order) => {
+                const confirmationCode = getOrderConfirmationCode(order.id)
+                const elapsed = describeElapsed(order.createdAt)
+                const itemEntries = buildOrderItemEntries(order)
+                return (
+                  <article
+                    key={order.id}
+                    className={`admin-serving-mini-card${order.id === highlightedId ? ' highlight' : ''}`}
+                    data-order-id={order.id}
+                  >
+                    <div className="admin-serving-mini-header">
+                      <span className="admin-serving-ticket" aria-label={`呼出番号 ${order.callNumber}`}>
+                        <span className="admin-payment-ticket badge small">{order.callNumber}</span>
+                      </span>
+                      <span className="admin-serving-code">確認コード {confirmationCode}</span>
+                      <span className="admin-serving-progress-code">進捗コード {order.ticket}</span>
+                    </div>
+                    {itemEntries.length > 0 && (
+                      <OrderItemsInline
+                        entries={itemEntries}
+                        showTotal={false}
+                        variant="compact"
+                        className="admin-serving-items-inline"
+                      />
+                    )}
+                    <div className="admin-serving-time-group">
+                      <time dateTime={order.createdAt} className="admin-serving-time">
+                        {order.createdAt}
+                      </time>
+                      {elapsed && <span className="admin-serving-elapsed">{elapsed}</span>}
+                    </div>
+                    <div className="admin-serving-mini-actions">
+                      <button
+                        type="button"
+                        className="admin-serving-button primary small"
+                        onClick={() => markAsDelivered(order)}
+                        disabled={mutatingId === order.id}
+                      >
+                        受け渡し完了
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
               {upcomingList.length === 0 && (
                 <p className="admin-serving-empty">受注済みの注文はありません。</p>
               )}
@@ -278,31 +424,42 @@ export function AdminServingView() {
               <p>最近の受け渡し履歴です。</p>
             </header>
             <div className="admin-serving-list compact">
-              {deliveredList.map((order) => (
-                <article
-                  key={order.id}
-                  className={`admin-serving-mini-card${order.id === highlightedId ? ' highlight' : ''}`}
-                  data-order-id={order.id}
-                >
-                  <div>
-                    <p
-                      className="admin-serving-ticket"
-                      aria-label={`呼出番号 ${order.callNumber}`}
-                    >
-                      <span className="admin-payment-ticket badge small">{order.callNumber}</span>
-                    </p>
-                    <p className="admin-serving-code">確認コード {order.ticket}</p>
-                  </div>
-                  <span className="admin-serving-time">{order.createdAt}</span>
-                  <button
-                    type="button"
-                    className="admin-serving-button ghost"
-                    onClick={() => revertToReady(order.id)}
+              {deliveredList.map((order) => {
+                const confirmationCode = getOrderConfirmationCode(order.id)
+                const elapsed = describeElapsed(order.createdAt)
+                return (
+                  <article
+                    key={order.id}
+                    className={`admin-serving-mini-card${order.id === highlightedId ? ' highlight' : ''}`}
+                    data-order-id={order.id}
                   >
-                    戻す
-                  </button>
-                </article>
-              ))}
+                    <div>
+                      <p
+                        className="admin-serving-ticket"
+                        aria-label={`呼出番号 ${order.callNumber}`}
+                      >
+                        <span className="admin-payment-ticket badge small">{order.callNumber}</span>
+                      </p>
+                      <p className="admin-serving-code">確認コード {confirmationCode}</p>
+                      <p className="admin-serving-progress-code">進捗コード {order.ticket}</p>
+                    </div>
+                    <div className="admin-serving-time-group">
+                      <time dateTime={order.createdAt} className="admin-serving-time">
+                        {order.createdAt}
+                      </time>
+                      {elapsed && <span className="admin-serving-elapsed">{elapsed}</span>}
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-serving-button ghost"
+                      onClick={() => revertToReady(order)}
+                      disabled={mutatingId === order.id}
+                    >
+                      戻す
+                    </button>
+                  </article>
+                )
+              })}
               {deliveredList.length === 0 && (
                 <p className="admin-serving-empty">受け渡し済みの記録はありません。</p>
               )}

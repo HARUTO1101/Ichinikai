@@ -1,26 +1,105 @@
-import { useMemo, useState } from 'react'
-import { dummyOrders, progressStages, type OrderPayment, type OrderProgress } from './adminOrdersData'
+import { useCallback, useMemo, useState } from 'react'
+import { exportOrdersCsv, updateOrderStatus } from '../../../services/orders'
+import { useOrdersSubscription } from '../../../hooks/useOrdersSubscription'
+import {
+  mapOrderDetailToRow,
+  nextProgressStatus,
+  previousProgressStatus,
+  progressStages,
+  type OrderRow,
+} from './adminOrdersData'
+import { PAYMENT_STATUSES, type PaymentStatus, type ProgressStatus } from '../../../types/order'
+
+type ProgressFilter = 'すべて' | ProgressStatus
+type PaymentFilter = 'すべて' | PaymentStatus
 
 export function AdminOrdersView() {
-  const [progressFilter, setProgressFilter] = useState<'すべて' | OrderProgress>('すべて')
-  const [paymentFilter, setPaymentFilter] = useState<'すべて' | OrderPayment>('すべて')
+  const { orders: rawOrders, loading, error } = useOrdersSubscription()
+  const rows = useMemo(() => rawOrders.map(mapOrderDetailToRow), [rawOrders])
+
+  const [progressFilter, setProgressFilter] = useState<ProgressFilter>('すべて')
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('すべて')
   const [keyword, setKeyword] = useState('')
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const filteredOrders = useMemo(() => {
-    return dummyOrders
-      .filter((order) =>
-        progressFilter === 'すべて' ? true : order.progress === progressFilter,
-      )
+    const normalized = keyword.trim().toLowerCase()
+    const progressWeights = new Map(progressStages.map((status, index) => [status, index]))
+
+    return rows
+      .filter((order) => (progressFilter === 'すべて' ? true : order.progress === progressFilter))
       .filter((order) => (paymentFilter === 'すべて' ? true : order.payment === paymentFilter))
       .filter((order) => {
-        if (!keyword.trim()) return true
+        if (!normalized) return true
         const target = `${order.id} ${order.ticket} ${order.callNumber} ${order.items}`.toLowerCase()
-        return target.includes(keyword.trim().toLowerCase())
+        return target.includes(normalized)
       })
-      .sort(
-        (a, b) => progressStages.indexOf(a.progress) - progressStages.indexOf(b.progress) || (a.createdAt < b.createdAt ? 1 : -1),
-      )
-  }, [keyword, paymentFilter, progressFilter])
+      .sort((a, b) => {
+        const progressDiff =
+          (progressWeights.get(a.progress) ?? 0) - (progressWeights.get(b.progress) ?? 0)
+        if (progressDiff !== 0) return progressDiff
+        const aTime = a.createdAtDate?.getTime() ?? 0
+        const bTime = b.createdAtDate?.getTime() ?? 0
+        return bTime - aTime
+      })
+  }, [keyword, paymentFilter, progressFilter, rows])
+
+  const handleAdvance = useCallback(
+    async (order: OrderRow) => {
+      const next = nextProgressStatus(order.progress)
+      if (!next) return
+      setUpdatingId(order.id)
+      setActionError(null)
+      try {
+        await updateOrderStatus(order.id, order.ticket, {
+          payment: order.payment,
+          progress: next,
+        })
+      } catch (err) {
+        console.error('ステータス更新に失敗しました', err)
+        setActionError('ステータスの更新に失敗しました。通信環境をご確認ください。')
+      } finally {
+        setUpdatingId(null)
+      }
+    },
+    [],
+  )
+
+  const handleRevert = useCallback(
+    async (order: OrderRow) => {
+      const previous = previousProgressStatus(order.progress)
+      if (!previous) return
+      setUpdatingId(order.id)
+      setActionError(null)
+      try {
+        await updateOrderStatus(order.id, order.ticket, {
+          payment: order.payment,
+          progress: previous,
+        })
+      } catch (err) {
+        console.error('ステータスを戻せませんでした', err)
+        setActionError('ステータスを戻せませんでした。もう一度お試しください。')
+      } finally {
+        setUpdatingId(null)
+      }
+    },
+    [],
+  )
+
+  const handleExportCsv = useCallback(async () => {
+    setActionError(null)
+    try {
+      await exportOrdersCsv()
+    } catch (err) {
+      console.error('CSV 出力に失敗しました', err)
+      setActionError('CSV の出力に失敗しました。通信環境をご確認ください。')
+    }
+  }, [])
+
+  if (loading) {
+    return <p>注文データを読み込み中です…</p>
+  }
 
   return (
     <div>
@@ -30,7 +109,7 @@ export function AdminOrdersView() {
           <select
             id="order-progress"
             value={progressFilter}
-            onChange={(event) => setProgressFilter(event.target.value as typeof progressFilter)}
+            onChange={(event) => setProgressFilter(event.target.value as ProgressFilter)}
           >
             <option value="すべて">すべて</option>
             {progressStages.map((status) => (
@@ -45,12 +124,14 @@ export function AdminOrdersView() {
           <select
             id="order-payment"
             value={paymentFilter}
-            onChange={(event) => setPaymentFilter(event.target.value as typeof paymentFilter)}
+            onChange={(event) => setPaymentFilter(event.target.value as PaymentFilter)}
           >
             <option value="すべて">すべて</option>
-            <option value="支払い済み">支払い済み</option>
-            <option value="未払い">未払い</option>
-            <option value="キャンセル">キャンセル</option>
+            {PAYMENT_STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
           </select>
         </div>
         <div className="field" style={{ flex: '1 1 240px' }}>
@@ -63,13 +144,34 @@ export function AdminOrdersView() {
             onChange={(event) => setKeyword(event.target.value)}
           />
         </div>
-        <button type="button" className="admin-secondary-button">
+        <button
+          type="button"
+          className="admin-secondary-button"
+          disabled={filteredOrders.length === 0}
+          onClick={() => {
+            const target = filteredOrders[0]
+            if (target) {
+              handleAdvance(target).catch(() => {})
+            }
+          }}
+        >
           選択行を進捗更新
         </button>
-        <button type="button" className="admin-primary-button">
-          CSV 出力（50件）
+        <button type="button" className="admin-primary-button" onClick={() => void handleExportCsv()} disabled={rows.length === 0}>
+          CSV 出力
         </button>
       </div>
+
+      {error && (
+        <p className="admin-error" role="alert">
+          データの取得に失敗しました。ページを再読み込みしてください。
+        </p>
+      )}
+      {actionError && (
+        <p className="admin-error" role="alert">
+          {actionError}
+        </p>
+      )}
 
       <div style={{ overflowX: 'auto' }}>
         <table className="admin-table">
@@ -113,10 +215,20 @@ export function AdminOrdersView() {
                 </td>
                 <td>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button type="button" className="admin-secondary-button">
+                    <button
+                      type="button"
+                      className="admin-secondary-button"
+                      onClick={() => handleAdvance(order)}
+                      disabled={updatingId === order.id || nextProgressStatus(order.progress) === null}
+                    >
                       次のステータスへ
                     </button>
-                    <button type="button" className="admin-secondary-button">
+                    <button
+                      type="button"
+                      className="admin-secondary-button"
+                      onClick={() => handleRevert(order)}
+                      disabled={updatingId === order.id || previousProgressStatus(order.progress) === null}
+                    >
                       戻す
                     </button>
                   </div>
@@ -126,8 +238,11 @@ export function AdminOrdersView() {
           </tbody>
         </table>
       </div>
+      {filteredOrders.length === 0 && (
+        <p style={{ marginTop: 18, color: '#64748b' }}>該当する注文はありません。</p>
+      )}
       <p style={{ marginTop: 18, color: '#64748b' }}>
-        デモ表示のため、データはローカルメモリ上でのみ更新されます。本番環境では Firestore の snapshot を利用して 2 秒以内に更新されます。
+        Firestore の注文データをリアルタイムに表示しています。操作すると全スタッフに即時反映されます。
       </p>
     </div>
   )

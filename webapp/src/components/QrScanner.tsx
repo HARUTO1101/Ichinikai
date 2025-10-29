@@ -26,6 +26,17 @@ export function QrScanner({
 
     let isMounted = true
     const startScanner = async () => {
+      if (
+        typeof navigator === 'undefined' ||
+        !navigator.mediaDevices ||
+        typeof navigator.mediaDevices.getUserMedia !== 'function'
+      ) {
+        onError?.(
+          'カメラを利用できません。HTTPSでアクセスしているか、Safariの設定でカメラ使用を許可してください。',
+        )
+        return
+      }
+
       const codeReader = new BrowserQRCodeReader()
       try {
         controlsRef.current = await codeReader.decodeFromConstraints(

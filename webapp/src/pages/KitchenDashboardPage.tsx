@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { MENU_ITEM_LIST, type MenuItemKey, type OrderDetail } from '../types/order'
+import { type MenuItemKey, type OrderDetail } from '../types/order'
 import { fetchKitchenOrders } from '../services/orders'
 import { computeHourlyMenuSales, summarizeActiveOrders } from '../utils/kitchen'
 import { useOrderToasts } from '../context/OrderToastContext'
+import { useAuth } from '../context/AuthContext'
+import { useMenuConfig } from '../hooks/useMenuConfig'
 import './KitchenDashboardPage.css'
 
 const REFRESH_INTERVAL_MS = 60_000
@@ -29,6 +31,8 @@ export function KitchenDashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const { registerListener } = useOrderToasts()
+  const { signOut } = useAuth()
+  const { menuItems } = useMenuConfig()
 
   const selectedDate = useMemo(() => {
     const date = new Date(`${dateInput}T00:00:00`)
@@ -111,14 +115,14 @@ export function KitchenDashboardPage() {
   )
 
   const dayTotals = useMemo(() => {
-    const totals = MENU_ITEM_LIST.reduce((acc, item) => {
+    const totals = menuItems.reduce((acc, item) => {
       acc[item.key] = hourlyRows.reduce((sum, row) => sum + (row.totals[item.key] ?? 0), 0)
       return acc
     }, {} as Record<MenuItemKey, number>)
     const totalItems = Object.values(totals).reduce((sum, value) => sum + value, 0)
     const totalOrders = hourlyRows.reduce((sum, row) => sum + row.orderCount, 0)
     return { totals, totalItems, totalOrders }
-  }, [hourlyRows])
+  }, [hourlyRows, menuItems])
 
   const handleDateChange = (event: ChangeEvent<HTMLInputElement>) => {
     setDateInput(event.target.value)
@@ -127,6 +131,10 @@ export function KitchenDashboardPage() {
   const handleManualRefresh = () => {
     setLastUpdated(null)
     void fetchData()
+  }
+
+  const handleSignOut = () => {
+    void signOut()
   }
 
   return (
@@ -157,6 +165,9 @@ export function KitchenDashboardPage() {
           >
             今すぐ再読み込み
           </button>
+          <button type="button" className="button secondary" onClick={handleSignOut}>
+            サインアウト
+          </button>
           <p className="kitchen-last-updated">
             最終更新: {lastUpdated ? formatTimeWithSeconds(lastUpdated) : '更新待ち'}
           </p>
@@ -173,7 +184,7 @@ export function KitchenDashboardPage() {
           <p>受注済み〜調理済みまでの進行中オーダーを合計しています。</p>
         </div>
         <div className="kitchen-summary-grid">
-          {MENU_ITEM_LIST.map((item) => (
+          {menuItems.map((item) => (
             <article key={item.key} className="kitchen-summary-card">
               <h3>{item.label}</h3>
               <p className="kitchen-summary-count">{activeSummary.totals[item.key]}個</p>
@@ -209,7 +220,7 @@ export function KitchenDashboardPage() {
               <thead>
                 <tr>
                   <th scope="col">時間帯</th>
-                  {MENU_ITEM_LIST.map((item) => (
+                  {menuItems.map((item) => (
                     <th scope="col" key={item.key}>
                       {item.label}
                     </th>
@@ -222,7 +233,7 @@ export function KitchenDashboardPage() {
                 {hourlyRowsWithData.map((row) => (
                   <tr key={row.label}>
                     <th scope="row">{row.label}</th>
-                    {MENU_ITEM_LIST.map((item) => (
+                    {menuItems.map((item) => (
                       <td key={item.key}>
                         {row.totals[item.key] > 0 ? row.totals[item.key] : '—'}
                       </td>
@@ -235,7 +246,7 @@ export function KitchenDashboardPage() {
               <tfoot>
                 <tr>
                   <th scope="row">合計</th>
-                  {MENU_ITEM_LIST.map((item) => (
+                  {menuItems.map((item) => (
                     <td key={item.key}>{dayTotals.totals[item.key] || '—'}</td>
                   ))}
                   <td>{dayTotals.totalItems || '—'}</td>

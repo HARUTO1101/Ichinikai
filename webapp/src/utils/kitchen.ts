@@ -1,4 +1,5 @@
-import { MENU_ITEM_LIST, type MenuItemKey, type OrderDetail, type ProgressStatus } from '../types/order'
+import { getMenuSnapshot } from '../store/menuConfigStore'
+import { type MenuItemKey, type OrderDetail, type ProgressStatus } from '../types/order'
 
 type MenuTotals = Record<MenuItemKey, number>
 
@@ -19,11 +20,13 @@ export interface ActiveOrderSummary {
 
 const HOUR_IN_MS = 60 * 60 * 1000
 
-const createEmptyMenuTotals = (): MenuTotals =>
-  MENU_ITEM_LIST.reduce((acc, item) => {
+const createEmptyMenuTotals = (): MenuTotals => {
+  const { list } = getMenuSnapshot()
+  return list.reduce((acc, item) => {
     acc[item.key] = 0
     return acc
   }, {} as MenuTotals)
+}
 
 const formatHourLabel = (date: Date) => `${date.getHours().toString().padStart(2, '0')}:00`
 

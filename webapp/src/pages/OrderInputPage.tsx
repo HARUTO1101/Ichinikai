@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MENU_ITEM_LIST } from '../types/order'
+import { ALLERGENS } from '../types/order'
 import { useEnsureAnonymousAuth } from '../hooks/useEnsureAnonymousAuth'
 import { QuantityStepper } from '../components/QuantityStepper'
 import { useOrderFlow } from '../context/OrderFlowContext'
+import { useMenuConfig } from '../hooks/useMenuConfig'
 
 export function OrderInputPage() {
   const navigate = useNavigate()
   const { ready, error: authError } = useEnsureAnonymousAuth()
+  const { menuItems } = useMenuConfig()
   const {
     items,
     updateQuantity,
@@ -58,7 +60,7 @@ export function OrderInputPage() {
         )}
 
         <form className="form-grid" onSubmit={handleProceed}>
-          {MENU_ITEM_LIST.map((item) => (
+          {menuItems.map((item) => (
             <article key={item.key} className="menu-card">
               <div className="menu-card-media">
                 <img
@@ -76,6 +78,35 @@ export function OrderInputPage() {
                   <span className="menu-card-price">¥{item.price.toLocaleString()}</span>
                 </header>
                 <p className="menu-card-description">{item.description}</p>
+                {item.allergens.length > 0 && (
+                  <ul
+                    className="menu-card-allergens"
+                    aria-label={`${item.label}に含まれる特定原材料表示`}
+                  >
+                    {item.allergens.map((allergenKey) => {
+                      const allergen = ALLERGENS[allergenKey]
+                      return (
+                        <li
+                          key={allergen.key}
+                          className="menu-card-allergen"
+                          title={allergen.label}
+                          aria-label={allergen.label}
+                        >
+                          <span className="menu-card-allergen-icon" aria-hidden="true">
+                            <img
+                              src={allergen.icon}
+                              alt={allergen.label}
+                              loading="lazy"
+                              decoding="async"
+                              width={48}
+                              height={48}
+                            />
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
                 <div className="menu-card-footer">
                   <QuantityStepper
                     value={items[item.key]}

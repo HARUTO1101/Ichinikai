@@ -4,21 +4,30 @@ import {
   useMemo,
   useState,
   useCallback,
+  useEffect,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
 } from 'react'
+import { FirebaseError } from 'firebase/app'
 import QRCode from 'qrcode'
-import { createOrder, fetchOrderByTicket, fetchOrderDetail } from '../services/orders'
-import { addOrderHistory } from '../services/orderHistory'
 import {
-  MENU_ITEM_LIST,
+  createOrder,
+  fetchOrderByTicket,
+  fetchOrderDetail,
+  subscribeOrderLookup,
+} from '../services/orders'
+import { addOrderHistory } from '../services/orderHistory'
+import { useMenuConfig } from '../hooks/useMenuConfig'
+import {
+  MENU_ITEMS,
   type MenuItem,
   type MenuItemKey,
   type OrderLookupResult,
   type OrderSummary,
 } from '../types/order'
 import { buildTicketUrl, extractTicketFromInput } from '../utils/ticket'
+import { ensurePlatingProgress } from '../utils/plating'
 
 interface CartItemView {
   item: MenuItem
@@ -35,15 +44,23 @@ interface OrderResultPayload {
 const ensureCallNumber = (value: number | undefined): number =>
   Number.isInteger(value) && value !== null && value !== undefined && value > 0 ? value : 0
 
-const createSummaryFromDetail = (detail: OrderLookupResult | OrderSummary): OrderSummary => ({
-  orderId: detail.orderId,
-  ticket: detail.ticket,
-  callNumber: ensureCallNumber(detail.callNumber),
-  total: detail.total,
-  items: detail.items,
-  payment: detail.payment,
-  progress: detail.progress,
-})
+const createSummaryFromDetail = (detail: OrderLookupResult | OrderSummary): OrderSummary => {
+  const items = detail.items ?? {}
+  return {
+    orderId: detail.orderId,
+    ticket: detail.ticket,
+    callNumber: ensureCallNumber(detail.callNumber),
+    total: detail.total,
+    items,
+    payment: detail.payment,
+    progress: detail.progress,
+    plating: ensurePlatingProgress(items, detail.plating),
+    createdAt: detail.createdAt ? new Date(detail.createdAt) : undefined,
+  }
+}
+
+const isPermissionDeniedError = (error: unknown): boolean =>
+  error instanceof FirebaseError && error.code === 'permission-denied'
 
 interface OrderFlowContextValue {
   items: Record<MenuItemKey, number>
@@ -66,15 +83,16 @@ interface OrderFlowContextValue {
 const OrderFlowContext = createContext<OrderFlowContextValue | undefined>(undefined)
 
 const createInitialQuantities = () =>
-  MENU_ITEM_LIST.reduce(
-    (acc, item) => {
-      acc[item.key] = 0
+  Object.keys(MENU_ITEMS).reduce(
+    (acc, key) => {
+      acc[key as MenuItemKey] = 0
       return acc
     },
     {} as Record<MenuItemKey, number>,
   )
 
 export function OrderFlowProvider({ children }: { children: ReactNode }) {
+  const { menuItems } = useMenuConfig()
   const [items, setItems] = useState<Record<MenuItemKey, number>>(createInitialQuantities)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -93,12 +111,14 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
 
   const cartItems = useMemo<CartItemView[]>(
     () =>
-      MENU_ITEM_LIST.map((item) => ({
-        item,
-        quantity: items[item.key],
-        subtotal: items[item.key] * item.price,
-      })).filter(({ quantity }) => quantity > 0),
-    [items],
+      menuItems
+        .map((item) => ({
+          item,
+          quantity: items[item.key],
+          subtotal: items[item.key] * item.price,
+        }))
+        .filter(({ quantity }) => quantity > 0),
+    [items, menuItems],
   )
 
   const total = useMemo(
@@ -127,7 +147,8 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
     setOrderResult(null)
 
     try {
-  const summary = createSummaryFromDetail(await createOrder(items))
+      const created = await createOrder(items)
+      const summary = createSummaryFromDetail(created)
       const payload = await buildOrderResultPayload(summary)
       setOrderResult(payload)
       try {
@@ -159,12 +180,23 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
     if (!orderResult) return null
 
     try {
-      const detail = await fetchOrderDetail(orderResult.summary.orderId)
-      if (!detail) {
+      const lookup = await fetchOrderByTicket(orderResult.summary.ticket)
+      if (!lookup) {
+        setOrderResult(null)
         return null
       }
 
-      const nextSummary = createSummaryFromDetail(detail)
+      let detail = null
+      try {
+        detail = await fetchOrderDetail(lookup.orderId)
+      } catch (detailError) {
+        if (!isPermissionDeniedError(detailError)) {
+          throw detailError
+        }
+        console.info('orders コレクションの参照権限がないため orderLookup の情報を利用します。', detailError)
+      }
+
+      const nextSummary = createSummaryFromDetail(detail ?? lookup)
 
       setOrderResult((prev) => (prev ? { ...prev, summary: nextSummary } : prev))
       return nextSummary
@@ -180,13 +212,22 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
       if (!normalized) return null
 
       try {
-        const detail = await fetchOrderByTicket(normalized)
-        if (!detail) {
+        const lookup = await fetchOrderByTicket(normalized)
+        if (!lookup) {
           setOrderResult(null)
           return null
         }
 
-        const summary = createSummaryFromDetail(detail)
+        let detail = null
+        try {
+          detail = await fetchOrderDetail(lookup.orderId)
+        } catch (detailError) {
+          if (!isPermissionDeniedError(detailError)) {
+            throw detailError
+          }
+          console.info('orders コレクションの参照権限がないため orderLookup の情報を利用します。', detailError)
+        }
+        const summary = createSummaryFromDetail(detail ?? lookup)
 
         const payload = await buildOrderResultPayload(summary)
         setOrderResult(payload)
@@ -198,6 +239,50 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
     },
     [buildOrderResultPayload],
   )
+
+  const activeTicket = orderResult?.summary.ticket ?? ''
+
+  useEffect(() => {
+    if (!activeTicket) {
+      return
+    }
+
+    const unsubscribe = subscribeOrderLookup(activeTicket, (lookup) => {
+      if (!lookup) {
+        setOrderResult(null)
+        return
+      }
+
+      setOrderResult((prev) => {
+        if (!prev) {
+          return prev
+        }
+
+        const nextSummary = createSummaryFromDetail(lookup)
+        const prevSummary = prev.summary
+
+        const hasChanges =
+          prevSummary.progress !== nextSummary.progress ||
+          prevSummary.payment !== nextSummary.payment ||
+          prevSummary.callNumber !== nextSummary.callNumber ||
+          prevSummary.total !== nextSummary.total ||
+          prevSummary.orderId !== nextSummary.orderId
+
+        if (!hasChanges) {
+          return prev
+        }
+
+        return {
+          ...prev,
+          summary: nextSummary,
+        }
+      })
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [activeTicket])
 
   const value = useMemo<OrderFlowContextValue>(
     () => ({

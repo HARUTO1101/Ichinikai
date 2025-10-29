@@ -1,10 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { MENU_ITEMS, type MenuItemKey, type OrderDetail } from '../types/order'
+import { type MenuItem, type MenuItemKey, type OrderDetail } from '../types/order'
 import { subscribeNewOrders } from '../services/orders'
 import {
   subscribeKitchenToastTest,
   type KitchenToastTestDetail,
 } from '../events/kitchenToastTest'
+import { useMenuConfig } from '../hooks/useMenuConfig'
+import { useAuth } from './AuthContext'
 
 export interface OrderToast {
   id: string
@@ -36,11 +38,14 @@ const OrderToastContext = createContext<OrderToastContextValue | undefined>(unde
 
 const TOAST_DURATION_MS = 6_000
 
-function buildToastFromOrder(order: OrderDetail): OrderToast {
+function buildToastFromOrder(
+  menuItemMap: Record<MenuItemKey, MenuItem>,
+  order: OrderDetail,
+): OrderToast {
   const itemSummary = Object.entries(order.items)
     .filter(([, quantity]) => quantity > 0)
     .map(([key, quantity]) => {
-      const menu = MENU_ITEMS[key as MenuItemKey]
+      const menu = menuItemMap[key as MenuItemKey]
       const label = menu?.label ?? key
       return `${label} ×${quantity}`
     })
@@ -78,6 +83,9 @@ export function OrderToastProvider({ children }: OrderToastProviderProps) {
   const [toasts, setToasts] = useState<OrderToast[]>([])
   const toastTimersRef = useRef<Map<string, number>>(new Map())
   const listenersRef = useRef(new Set<(event: OrderToastEvent) => void>())
+  const { status, hasRole } = useAuth()
+  const { menuItemMap } = useMenuConfig()
+  const canSubscribe = status === 'signed-in' && hasRole(['admin', 'staff', 'kitchen'])
 
   const emit = useCallback((event: OrderToastEvent) => {
     listenersRef.current.forEach((listener) => {
@@ -151,15 +159,19 @@ export function OrderToastProvider({ children }: OrderToastProviderProps) {
   }, [])
 
   useEffect(() => {
+    if (!canSubscribe) {
+      return
+    }
+
     const unsubscribe = subscribeNewOrders((order) => {
-      const toast = buildToastFromOrder(order)
+      const toast = buildToastFromOrder(menuItemMap, order)
       enqueueToast(toast, { type: 'new-order', order })
     })
 
     return () => {
       unsubscribe?.()
     }
-  }, [enqueueToast])
+  }, [canSubscribe, enqueueToast, menuItemMap])
 
   useEffect(() => {
     const unsubscribe = subscribeKitchenToastTest((detail) => {

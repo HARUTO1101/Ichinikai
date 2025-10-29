@@ -57,7 +57,9 @@ export function OrderReviewPage() {
           <div className="receipt-items">
             {cartItems.map(({ item, quantity, subtotal }) => (
               <div key={item.key} className="receipt-row">
-                <span className="receipt-item-name">{item.label}</span>
+                <div className="receipt-item-info">
+                  <span className="receipt-item-name">{item.label}</span>
+                </div>
                 <span className="receipt-item-qty">×{quantity}</span>
                 <span className="receipt-item-subtotal">¥{subtotal.toLocaleString()}</span>
               </div>
