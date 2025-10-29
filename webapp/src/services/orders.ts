@@ -101,3 +101,5 @@ export const subscribeNewOrders = subscribeNewOrdersImpl
 export const subscribeOrders = subscribeOrdersImpl
 
 export const subscribeOrderLookup = subscribeOrderLookupImpl
+
+export type { SubscribeOrdersOptions } from './orders/firebase'

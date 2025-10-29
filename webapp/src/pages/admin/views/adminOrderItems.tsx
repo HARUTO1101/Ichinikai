@@ -1,18 +1,10 @@
 import { getMenuSnapshot } from '../../../store/menuConfigStore'
-import { type MenuItemKey } from '../../../types/order'
+import { getAdminMenuLabel, type MenuItemKey } from '../../../types/order'
 import { getPlatingCategoryByMenuItem } from '../../../utils/plating'
 import { type OrderRow } from './adminOrdersData'
 
-const MENU_ITEM_SHORT_LABELS: Partial<Record<MenuItemKey, string>> = {
-  potaufeu: 'ポトフ',
-  plain: 'プレーン',
-  cocoa: 'ココア',
-  kinako: 'きなこ',
-  garlic: 'ガーリック',
-}
-
 export type OrderItemEntry = {
-  key: string
+  key: MenuItemKey
   label: string
   quantity: number
   stateClass: 'is-zero' | 'is-complete' | 'is-pending'
@@ -37,7 +29,7 @@ export function buildOrderItemEntries(order: OrderRow): OrderItemEntry[] {
     const stateClass = getQuantityClassName(quantity, status)
     return {
       key: menuItem.key,
-      label: MENU_ITEM_SHORT_LABELS[menuItem.key] ?? menuMap[menuItem.key].label,
+      label: getAdminMenuLabel(menuItem.key, menuMap[menuItem.key].label),
       quantity,
       stateClass,
     }
@@ -74,8 +66,13 @@ export function OrderItemsInline({
         <div className="admin-production-items-grid">
           {entries.map((entry) => (
             <div key={entry.key} className="admin-production-item-cell">
-              <span className="admin-production-item-label">{entry.label}</span>
-              <span className={`admin-production-quantity ${entry.stateClass}`}>
+              <span className={`admin-production-item-label menu-item-${entry.key}`}>
+                {entry.label}
+              </span>
+              <span
+                className={`admin-production-quantity ${entry.stateClass} menu-item-${entry.key}`}
+                data-menu-item={entry.key}
+              >
                 {entry.quantity}
               </span>
             </div>

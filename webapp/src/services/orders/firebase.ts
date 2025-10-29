@@ -23,6 +23,7 @@ import {
   type PaymentStatus,
   type ProgressStatus,
   type KitchenOrdersQuery,
+  type OrdersQueryOptions,
   type PlatingProgress,
 } from '../../types/order'
 import { getMenuSnapshot } from '../../store/menuConfigStore'
@@ -73,9 +74,11 @@ function toDate(timestamp?: Timestamp) {
   return timestamp ? timestamp.toDate() : undefined
 }
 
-interface SubscribeOptions {
+interface SubscribeBaseOptions {
   onError?: (error: unknown) => void
 }
+
+export interface SubscribeOrdersOptions extends SubscribeBaseOptions, OrdersQueryOptions {}
 
 const NEW_ORDER_QUERY_LIMIT = 20
 
@@ -344,7 +347,7 @@ export async function fetchKitchenOrdersFirebase(
 
 export function subscribeNewOrdersFirebase(
   onAdded: (order: OrderDetail) => void,
-  options: SubscribeOptions = {},
+  options: SubscribeBaseOptions = {},
 ): () => void {
   const ordersRef = collection(db, 'orders')
   const snapshotQuery = query(ordersRef, orderBy('createdAt', 'desc'), limit(NEW_ORDER_QUERY_LIMIT))
@@ -397,10 +400,27 @@ export function subscribeNewOrdersFirebase(
 
 export function subscribeOrdersFirebase(
   onChange: (orders: OrderDetail[]) => void,
-  options: SubscribeOptions = {},
+  options: SubscribeOrdersOptions = {},
 ): () => void {
   const ordersRef = collection(db, 'orders')
-  const snapshotQuery = query(ordersRef, orderBy('createdAt', 'desc'))
+  const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')]
+
+  const startDate = options.start
+  if (startDate && !Number.isNaN(startDate.getTime())) {
+    constraints.push(where('createdAt', '>=', Timestamp.fromDate(startDate)))
+  }
+
+  const endDate = options.end
+  if (endDate && !Number.isNaN(endDate.getTime())) {
+    constraints.push(where('createdAt', '<', Timestamp.fromDate(endDate)))
+  }
+
+  const limitValue = options.limit
+  if (typeof limitValue === 'number' && Number.isFinite(limitValue) && limitValue > 0) {
+    constraints.push(limit(Math.floor(limitValue)))
+  }
+
+  const snapshotQuery = query(ordersRef, ...constraints)
 
   const unsubscribe = onSnapshot(
     snapshotQuery,
@@ -436,7 +456,7 @@ export function subscribeOrdersFirebase(
 export function subscribeOrderLookupFirebase(
   ticket: string,
   onChange: (order: OrderLookupResult | null) => void,
-  options: SubscribeOptions = {},
+  options: SubscribeBaseOptions = {},
 ): () => void {
   const trimmed = ticket.trim().toUpperCase()
   if (!trimmed) {

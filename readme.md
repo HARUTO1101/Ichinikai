@@ -132,6 +132,8 @@ ticket不正時：「該当なし」表示。
 
 学園祭終了後、Firestore から CSV エクスポートしてバックアップ。
 
+メニュー差替え：`VITE_MENU_VARIANT=day12` (1-2日目) / `VITE_MENU_VARIANT=day34` (3-4日目) を `.env` やビルドコマンドに指定してデプロイする。
+
 ## 12. 将来拡張
 Cloud Functions による金額再計算・注文作成バリデーション。
 

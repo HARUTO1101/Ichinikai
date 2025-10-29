@@ -32,7 +32,14 @@ const paymentStatusChipTone: Record<PaymentStatus, 'warning' | 'success' | 'neut
 }
 
 export function AdminPaymentsView() {
-  const { orders: rawOrders, loading, error } = useOrdersSubscription()
+  const subscriptionOptions = useMemo(() => {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
+    return { start, end }
+  }, [])
+  const { orders: rawOrders, loading, error } = useOrdersSubscription(subscriptionOptions)
   const orders = useMemo(() => rawOrders.map(mapOrderDetailToRow), [rawOrders])
   const [keyword, setKeyword] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)

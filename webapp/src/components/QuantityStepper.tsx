@@ -6,6 +6,8 @@ interface QuantityStepperProps {
   max?: number
   onChange: (nextValue: number) => void
   ariaLabel?: string
+  decreaseLabel?: string
+  increaseLabel?: string
 }
 
 export const QuantityStepper = memo(function QuantityStepper({
@@ -14,6 +16,8 @@ export const QuantityStepper = memo(function QuantityStepper({
   max,
   onChange,
   ariaLabel,
+  decreaseLabel,
+  increaseLabel,
 }: QuantityStepperProps) {
   const handleDecrease = () => {
     const next = value - 1
@@ -33,7 +37,7 @@ export const QuantityStepper = memo(function QuantityStepper({
         type="button"
         className="quantity-button decrease"
         onClick={handleDecrease}
-        aria-label="数量を1減らす"
+        aria-label={decreaseLabel ?? '数量を1減らす'}
         disabled={value <= min}
       >
         −
@@ -45,7 +49,7 @@ export const QuantityStepper = memo(function QuantityStepper({
         type="button"
         className="quantity-button increase"
         onClick={handleIncrease}
-        aria-label="数量を1増やす"
+        aria-label={increaseLabel ?? '数量を1増やす'}
         disabled={typeof max === 'number' && value >= max}
       >
         ＋

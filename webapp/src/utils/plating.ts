@@ -1,5 +1,7 @@
 import {
+  ACTIVE_MENU_VARIANT,
   type MenuItemKey,
+  type MenuVariantKey,
   type PlatingCategoryKey,
   type PlatingProgress,
   type PlatingStatusMap,
@@ -12,20 +14,39 @@ export interface PlatingCategoryMeta {
   itemKeys: ReadonlyArray<MenuItemKey>
 }
 
-export const PLATING_CATEGORY_LIST: ReadonlyArray<PlatingCategoryMeta> = [
-  {
-    key: 'potaufeu',
-    label: 'ポトフ',
-    icon: '🥘',
-    itemKeys: ['potaufeu'],
-  },
-  {
-    key: 'friedBread',
-    label: '揚げパン',
-    icon: '🍞',
-    itemKeys: ['plain', 'cocoa', 'kinako', 'garlic'],
-  },
-]
+const PLATING_CATEGORY_VARIANTS: Record<MenuVariantKey, ReadonlyArray<PlatingCategoryMeta>> = {
+  day12: [
+    {
+      key: 'potaufeu',
+      label: 'ポトフ',
+      icon: '🥘',
+      itemKeys: ['potaufeu'],
+    },
+    {
+      key: 'friedBread',
+      label: '揚げパン',
+      icon: '🍞',
+      itemKeys: ['plain', 'cocoa', 'kinako', 'garlic'],
+    },
+  ],
+  day34: [
+    {
+      key: 'potaufeu',
+      label: 'ミネストローネ',
+      icon: '🥣',
+      itemKeys: ['minestrone'],
+    },
+    {
+      key: 'friedBread',
+      label: 'スモア',
+      icon: '🍪',
+      itemKeys: ['strawberry', 'blueberry', 'chocolate', 'honey'],
+    },
+  ],
+}
+
+export const PLATING_CATEGORY_LIST: ReadonlyArray<PlatingCategoryMeta> =
+  PLATING_CATEGORY_VARIANTS[ACTIVE_MENU_VARIANT]
 
 const menuKeyToCategory = new Map<MenuItemKey, PlatingCategoryKey>(
   PLATING_CATEGORY_LIST.flatMap((category) =>
@@ -40,15 +61,23 @@ export function getPlatingCategoryByMenuItem(menuKey: MenuItemKey): PlatingCateg
 export function calculatePlatingQuantities(
   items: Record<MenuItemKey, number>,
 ): Record<PlatingCategoryKey, number> {
-  return PLATING_CATEGORY_LIST.reduce<Record<PlatingCategoryKey, number>>(
+  const initial = PLATING_CATEGORY_LIST.reduce<Record<PlatingCategoryKey, number>>(
     (acc, category) => {
-      acc[category.key] = category.itemKeys.reduce((sum, itemKey) => sum + (items[itemKey] ?? 0), 0)
+      acc[category.key] = 0
       return acc
     },
-    {
-      potaufeu: 0,
-      friedBread: 0,
+    { potaufeu: 0, friedBread: 0 },
+  )
+
+  return PLATING_CATEGORY_LIST.reduce<Record<PlatingCategoryKey, number>>(
+    (acc, category) => {
+      acc[category.key] = category.itemKeys.reduce(
+        (sum, itemKey) => sum + (items[itemKey] ?? 0),
+        0,
+      )
+      return acc
     },
+    initial,
   )
 }
 

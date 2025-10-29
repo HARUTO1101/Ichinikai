@@ -120,7 +120,6 @@ export function AdminCashAuditView() {
   const [voucherUsageTotal, setVoucherUsageTotal] = useState<number>(() => initialConfiguration.usageTotal)
   const reportRef = useRef<HTMLDivElement | null>(null)
   const voucherPresetSourceRef = useRef(voucherPresetSource)
-  const { orders: orderDetails } = useOrdersSubscription()
 
   const startOfDay = useMemo(() => {
     const start = new Date(currentDate)
@@ -133,6 +132,12 @@ export function AdminCashAuditView() {
     end.setDate(end.getDate() + 1)
     return end
   }, [startOfDay])
+
+  const subscriptionOptions = useMemo(
+    () => ({ start: startOfDay, end: endOfDay }),
+    [startOfDay, endOfDay],
+  )
+  const { orders: orderDetails } = useOrdersSubscription(subscriptionOptions)
 
   const shiftsTotals = useMemo(() => {
     const startTime = startOfDay.getTime()

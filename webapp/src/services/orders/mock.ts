@@ -10,6 +10,7 @@ import {
 } from '../../types/order'
 import { getMenuSnapshot } from '../../store/menuConfigStore'
 import { createInitialPlatingProgress, ensurePlatingProgress } from '../../utils/plating'
+import type { SubscribeOrdersOptions } from './firebase'
 
 interface StoredOrder extends OrderDetail {
   createdAt?: Date
@@ -38,7 +39,7 @@ function emitNewOrder(order: StoredOrder) {
 }
 
 function emitOrderCollection() {
-  const snapshot = state.orders.map((order) => ({ ...order }))
+  const snapshot = state.orders.map((order) => cloneStoredOrder(order))
   orderCollectionListeners.forEach((listener) => {
     try {
       listener(snapshot)
@@ -46,6 +47,16 @@ function emitOrderCollection() {
       console.error('モック注文購読の通知でエラーが発生しました', error)
     }
   })
+}
+
+function cloneStoredOrder(order: StoredOrder): OrderDetail {
+  return {
+    ...order,
+    items: { ...order.items },
+    plating: ensurePlatingProgress(order.items, order.plating),
+    createdAt: order.createdAt ? new Date(order.createdAt) : undefined,
+    updatedAt: order.updatedAt ? new Date(order.updatedAt) : undefined,
+  }
 }
 
 function toOrderLookupResult(order: StoredOrder): OrderLookupResult {
@@ -470,11 +481,63 @@ export function subscribeNewOrdersMock(onAdded: (order: OrderDetail) => void) {
   }
 }
 
-export function subscribeOrdersMock(onChange: (orders: OrderDetail[]) => void) {
-  orderCollectionListeners.add(onChange)
-  onChange(state.orders.map((order) => ({ ...order })))
+export function subscribeOrdersMock(
+  onChange: (orders: OrderDetail[]) => void,
+  options: SubscribeOrdersOptions = {},
+) {
+  const startTime = options.start?.getTime()
+  const endTime = options.end?.getTime()
+  const limitValue = options.limit && Number.isFinite(options.limit) && options.limit > 0
+    ? Math.floor(options.limit)
+    : null
+
+  const applyFilters = (orders: OrderDetail[]) => {
+    const filtered = orders.filter((order) => {
+      const createdAt = order.createdAt ?? order.updatedAt
+      if (!createdAt) {
+        if (startTime != null || endTime != null) {
+          return false
+        }
+        return true
+      }
+
+      const timestamp = createdAt.getTime()
+      if (Number.isNaN(timestamp)) return false
+      if (startTime != null && timestamp < startTime) return false
+      if (endTime != null && timestamp >= endTime) return false
+      return true
+    })
+
+    const sorted = filtered.sort((a, b) => {
+      const aTime = a.createdAt?.getTime() ?? 0
+      const bTime = b.createdAt?.getTime() ?? 0
+      return bTime - aTime
+    })
+
+    const limited = limitValue ? sorted.slice(0, limitValue) : sorted
+
+    return limited.map((order) => ({
+      ...order,
+      items: { ...order.items },
+      plating: ensurePlatingProgress(order.items, order.plating),
+      createdAt: order.createdAt ? new Date(order.createdAt) : undefined,
+      updatedAt: order.updatedAt ? new Date(order.updatedAt) : undefined,
+    }))
+  }
+
+  const listener = (orders: OrderDetail[]) => {
+    try {
+      onChange(applyFilters(orders))
+    } catch (error) {
+      console.error('モック注文購読のフィルタリングでエラーが発生しました', error)
+    }
+  }
+
+  orderCollectionListeners.add(listener)
+  listener(state.orders.map((order) => cloneStoredOrder(order)))
+
   return () => {
-    orderCollectionListeners.delete(onChange)
+    orderCollectionListeners.delete(listener)
   }
 }
 

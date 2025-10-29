@@ -1,10 +1,11 @@
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth'
 import { useEffect, useState } from 'react'
 import { auth, isMockMode } from '../lib/firebase'
+import type { AuthErrorKey } from '../i18n/order'
 
 export function useEnsureAnonymousAuth() {
   const [ready, setReady] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<AuthErrorKey | null>(null)
 
   useEffect(() => {
     if (isMockMode) {
@@ -20,8 +21,8 @@ export function useEnsureAnonymousAuth() {
         }
         setReady(true)
       } catch (err) {
-        console.error('匿名認証に失敗しました', err)
-        setError('匿名認証に失敗しました。時間をおいて再度お試しください。')
+  console.error('匿名認証に失敗しました', err)
+  setError('ANON_SIGNIN_FAILED')
       }
     })
 

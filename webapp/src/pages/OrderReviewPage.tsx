@@ -1,7 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useEnsureAnonymousAuth } from '../hooks/useEnsureAnonymousAuth'
 import { useOrderFlow } from '../context/OrderFlowContext'
+import { useLanguage } from '../context/LanguageContext'
+import { ORDER_TEXT, getMenuItemLabel } from '../i18n/order'
 
 export function OrderReviewPage() {
   const navigate = useNavigate()
@@ -15,6 +17,10 @@ export function OrderReviewPage() {
     setError,
     confirmOrder,
   } = useOrderFlow()
+  const [pendingTicket, setPendingTicket] = useState<string | null>(null)
+  const [isWasteGuideOpen, setWasteGuideOpen] = useState(false)
+  const { language } = useLanguage()
+  const texts = ORDER_TEXT[language]
 
   useEffect(() => {
     if (!hasItems) {
@@ -29,36 +35,44 @@ export function OrderReviewPage() {
   const handleConfirm = async () => {
     const result = await confirmOrder()
     if (result) {
-      navigate(`/order/complete/${result.ticket}`, { replace: true })
+      setPendingTicket(result.ticket)
+      setWasteGuideOpen(true)
     }
+  }
+
+  const handleWasteGuideConfirm = () => {
+    if (!pendingTicket) {
+      setWasteGuideOpen(false)
+      return
+    }
+    navigate(`/order/complete/${pendingTicket}`, { replace: true })
   }
 
   return (
     <div className="content-container">
       <section className="content-card">
-        <h1 className="section-title">注文内容を確認</h1>
+        <h1 className="section-title">{texts.orderReview.title}</h1>
         <p className="section-description">
-          数量と合計金額を確認し、問題なければ注文を確定してください。
-          変更が必要な場合は戻って数量を調整できます。
+          {texts.orderReview.descriptionLead}
+          <br />
+          {texts.orderReview.descriptionFollow}
         </p>
 
-        {!ready && !authError && <p>匿名ログイン中です…</p>}
-        {authError && (
-          <p className="error-message">匿名認証に失敗しました。時間をおいてお試しください。</p>
-        )}
+        {!ready && !authError && <p>{texts.auth.signingIn}</p>}
+        {authError && <p className="error-message">{texts.auth.error}</p>}
 
         <div className="receipt-card">
           <div className="receipt-header">
-            <span>商品</span>
-            <span>数量</span>
-            <span>小計</span>
+            <span>{texts.orderReview.tableHeaders.item}</span>
+            <span>{texts.orderReview.tableHeaders.quantity}</span>
+            <span>{texts.orderReview.tableHeaders.subtotal}</span>
           </div>
           <div className="receipt-divider" aria-hidden="true" />
           <div className="receipt-items">
             {cartItems.map(({ item, quantity, subtotal }) => (
               <div key={item.key} className="receipt-row">
                 <div className="receipt-item-info">
-                  <span className="receipt-item-name">{item.label}</span>
+                  <span className="receipt-item-name">{getMenuItemLabel(item, language)}</span>
                 </div>
                 <span className="receipt-item-qty">×{quantity}</span>
                 <span className="receipt-item-subtotal">¥{subtotal.toLocaleString()}</span>
@@ -67,12 +81,35 @@ export function OrderReviewPage() {
           </div>
           <div className="receipt-divider" aria-hidden="true" />
           <div className="receipt-total">
-            <span>合計</span>
+            <span>{texts.orderReview.totalLabel}</span>
             <span>¥{total.toLocaleString()}</span>
           </div>
+
+            {isWasteGuideOpen && (
+              <div className="waste-guide-modal-backdrop" role="presentation">
+                <div
+                  className="waste-guide-modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="waste-guide-title"
+                  aria-describedby="waste-guide-description"
+                >
+                  <h2 id="waste-guide-title">{texts.wasteGuide.title}</h2>
+                  <p id="waste-guide-description">{texts.wasteGuide.description}</p>
+                  <div className="waste-guide-visual" aria-hidden="true">
+                    {texts.wasteGuide.placeholder}
+                  </div>
+                  <div className="waste-guide-actions">
+                    <button type="button" className="button primary" onClick={handleWasteGuideConfirm}>
+                      {texts.wasteGuide.confirm}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
         </div>
 
-        {error && <p style={{ color: '#dc2626', marginTop: 0 }}>{error}</p>}
+        {error && <p style={{ color: '#dc2626', marginTop: 0 }}>{texts.errors[error]}</p>}
 
         <div className="button-row">
           <button
@@ -81,7 +118,7 @@ export function OrderReviewPage() {
             onClick={handleConfirm}
             disabled={!ready || loading}
           >
-            {loading ? '確定中…' : 'この内容で注文する'}
+            {loading ? texts.orderReview.confirming : texts.orderReview.confirmButton}
           </button>
           <button
             type="button"
@@ -89,7 +126,7 @@ export function OrderReviewPage() {
             onClick={() => navigate('/order')}
             disabled={loading}
           >
-            数量を変更する
+            {texts.orderReview.changeButton}
           </button>
         </div>
       </section>

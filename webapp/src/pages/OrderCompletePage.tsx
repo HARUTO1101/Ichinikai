@@ -4,14 +4,30 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useEnsureAnonymousAuth } from '../hooks/useEnsureAnonymousAuth'
 import { useOrderFlow } from '../context/OrderFlowContext'
 import { useMenuConfig } from '../hooks/useMenuConfig'
+import { useLanguage } from '../context/LanguageContext'
+import {
+  ORDER_TEXT,
+  getMenuItemLabel,
+  getPaymentLabel,
+  getProgressLabel,
+  getProgressStepLabel,
+  type ProgressStepKey,
+} from '../i18n/order'
 import { type MenuItemKey, type ProgressStatus } from '../types/order'
 import { extractTicketFromInput } from '../utils/ticket'
 
-const CUSTOMER_PROGRESS_STEPS: ReadonlyArray<{ label: string; matches: ProgressStatus[] }> = [
-  { label: '受注済み', matches: ['受注済み'] },
-  { label: '調理済み\n（お受け取りOK）', matches: ['調理済み'] },
-  { label: '受け渡し済み', matches: ['クローズ'] },
+const CUSTOMER_PROGRESS_STEPS: ReadonlyArray<{
+  key: ProgressStepKey
+  matches: ProgressStatus[]
+}> = [
+  { key: 'received', matches: ['受注済み'] },
+  { key: 'ready', matches: ['調理済み'] },
+  { key: 'completed', matches: ['クローズ'] },
 ]
+
+type RefreshErrorKey = 'refreshFailed' | null
+type TicketLoadErrorKey = 'loadFailed' | null
+type TicketSearchErrorKey = 'required' | null
 
 interface OrderCompletePageProps {
   enableTicketSearch?: boolean
@@ -46,16 +62,21 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
   }, [ticketNavigationBase])
 
   const { ready, error: authError } = useEnsureAnonymousAuth()
+  const { language } = useLanguage()
+  const texts = ORDER_TEXT[language]
+  const orderTexts = texts.orderComplete
+  const authTexts = texts.auth
+  const copyTexts = texts.copy
   const { orderResult, startNewOrder, refreshOrderResult, loadOrderByTicket } = useOrderFlow()
   const [refreshing, setRefreshing] = useState(false)
-  const [refreshError, setRefreshError] = useState<string | null>(null)
+  const [refreshError, setRefreshError] = useState<RefreshErrorKey>(null)
   const [cooldownUntil, setCooldownUntil] = useState<number>(0)
   const [cooldownRemaining, setCooldownRemaining] = useState(0)
   const refreshCooldownMs = 5000
   const [loadingTicket, setLoadingTicket] = useState(false)
-  const [ticketLoadError, setTicketLoadError] = useState<string | null>(null)
+  const [ticketLoadError, setTicketLoadError] = useState<TicketLoadErrorKey>(null)
   const [ticketSearch, setTicketSearch] = useState('')
-  const [ticketSearchError, setTicketSearchError] = useState<string | null>(null)
+  const [ticketSearchError, setTicketSearchError] = useState<TicketSearchErrorKey>(null)
 
   useEffect(() => {
     if (!enableTicketSearch) return
@@ -83,8 +104,8 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
   const { menuItemMap } = useMenuConfig()
   const readyBannerCallNumber = summary?.callNumber && summary.callNumber > 0 ? summary.callNumber : null
   const readyBannerInstruction = readyBannerCallNumber
-    ? `呼出番号 ${readyBannerCallNumber} を確認のうえ、スタッフの案内にしたがってお受け取りください。`
-    : 'スタッフから呼び出しがあるまでその場でお待ちください。'
+    ? orderTexts.readyInstructionWithCallNumber(readyBannerCallNumber)
+    : orderTexts.readyInstructionWait
 
   // TODO: Remove preview toggle once ready banner design is approved
 
@@ -93,13 +114,13 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
       return { label: '', tone: 'unpaid' as const }
     }
     if (summary.progress === 'クローズ') {
-      return { label: '受取済み', tone: 'complete' as const }
+      return { label: orderTexts.paymentState.complete, tone: 'complete' as const }
     }
     if (summary.payment === '支払い済み') {
-      return { label: 'お支払い済み', tone: 'paid' as const }
+      return { label: orderTexts.paymentState.paid, tone: 'paid' as const }
     }
-    return { label: '未払い', tone: 'unpaid' as const }
-  }, [summary])
+    return { label: orderTexts.paymentState.unpaid, tone: 'unpaid' as const }
+  }, [orderTexts, summary])
 
   const orderDateInfo = useMemo(() => {
     if (!summary?.createdAt) {
@@ -109,22 +130,17 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
     if (Number.isNaN(createdAt.getTime())) {
       return { display: '', iso: '' }
     }
-    const formatter = new Intl.DateTimeFormat('ja-JP', {
+    const formatter = new Intl.DateTimeFormat(language === 'ja' ? 'ja-JP' : 'en-US', {
       dateStyle: 'medium',
       timeStyle: 'short',
     })
     return { display: formatter.format(createdAt), iso: createdAt.toISOString() }
-  }, [summary?.createdAt])
+  }, [language, summary?.createdAt])
 
-  const displayProgress = useMemo(() => {
-    if (currentProgress === '調理済み') {
-      return '調理済み\n（お受け取りOK）'
-    }
-    if (currentProgress === 'クローズ') {
-      return '受け渡し済み'
-    }
-    return '受注済み'
-  }, [currentProgress])
+  const displayProgress = useMemo(
+    () => getProgressLabel(currentProgress, language),
+    [currentProgress, language],
+  )
 
   const progressIndex = useMemo(() => {
     const index = CUSTOMER_PROGRESS_STEPS.findIndex((step) => step.matches.includes(currentProgress))
@@ -166,7 +182,7 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
       .catch((error) => {
         console.error(error)
         if (!active) return
-        setTicketLoadError('注文情報を取得できませんでした。時間をおいて再度お試しください。')
+        setTicketLoadError('loadFailed')
       })
       .finally(() => {
         if (active) {
@@ -213,7 +229,7 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
     event.preventDefault()
     const normalized = extractTicketFromInput(ticketSearch)
     if (!normalized) {
-      setTicketSearchError('チケット番号を入力してください。')
+      setTicketSearchError('required')
       return
     }
     setTicketSearchError(null)
@@ -222,31 +238,29 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
   }
 
   const ticketSearchForm = enableTicketSearch ? (
-    <section className="content-card" aria-label="進捗確認コード検索">
-      <h2 className="section-title">進捗確認コードで表示</h2>
-      <p className="section-description">
-        お客様用の進捗確認コードを入力するとこの画面で進捗を確認できます。
-      </p>
+    <section className="content-card" aria-label={orderTexts.ticketSearch.regionLabel}>
+      <h2 className="section-title">{orderTexts.ticketSearch.title}</h2>
+      <p className="section-description">{orderTexts.ticketSearch.description}</p>
       <form className="form-grid" onSubmit={handleTicketSearchSubmit}>
         <div className="field">
-          <label htmlFor="progress-ticket">進捗確認コード</label>
+          <label htmlFor="progress-ticket">{orderTexts.ticketSearch.label}</label>
           <input
             id="progress-ticket"
             type="text"
             inputMode="text"
             value={ticketSearch}
             onChange={(event) => setTicketSearch(event.target.value.toUpperCase())}
-            placeholder="例: AB12CD34EF56GH78"
+            placeholder={orderTexts.ticketSearch.placeholder}
             maxLength={24}
           />
         </div>
         <div className="button-row">
           <button type="submit" className="button primary">
-            進捗を表示
+            {orderTexts.ticketSearch.button}
           </button>
         </div>
       </form>
-      {ticketSearchError && <p className="error-message">{ticketSearchError}</p>}
+      {ticketSearchError && <p className="error-message">{orderTexts.ticketSearch.error}</p>}
     </section>
   ) : null
 
@@ -256,8 +270,8 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
         <div className="content-container">
           {ticketSearchForm}
           <section className="content-card order-complete-card" aria-live="polite">
-            <h1 className="section-title">注文情報を読み込んでいます…</h1>
-            <p className="section-description">少々お待ちください。</p>
+            <h1 className="section-title">{orderTexts.loadingTitle}</h1>
+            <p className="section-description">{orderTexts.loadingDescription}</p>
           </section>
         </div>
       )
@@ -268,15 +282,15 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
         <div className="content-container">
           {ticketSearchForm}
           <section className="content-card order-complete-card" aria-live="polite">
-            <h1 className="section-title">注文情報を取得できませんでした</h1>
-            <p className="section-description">{ticketLoadError}</p>
+            <h1 className="section-title">{orderTexts.loadErrorTitle}</h1>
+            <p className="section-description">{orderTexts.loadErrorDescription}</p>
             <div className="button-row">
               <button
                 type="button"
                 className="button secondary"
                 onClick={() => navigate(fallbackPath)}
               >
-                チケット番号を再入力する
+                {orderTexts.loadErrorAction}
               </button>
             </div>
           </section>
@@ -289,10 +303,8 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
         <div className="content-container">
           {ticketSearchForm}
           <section className="content-card order-complete-card" aria-live="polite">
-            <h1 className="section-title">進捗確認コードを入力してください</h1>
-            <p className="section-description">
-              進捗確認コードを入力するとすぐに進捗を確認できます。
-            </p>
+            <h1 className="section-title">{orderTexts.inviteTitle}</h1>
+            <p className="section-description">{orderTexts.inviteDescription}</p>
           </section>
         </div>
       )
@@ -301,12 +313,12 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
     return null
   }
 
-  const viewTitle = titleOverride ?? '注文が完了しました！'
+  const viewTitle = titleOverride ?? orderTexts.title
   const viewDescription =
     descriptionOverride ??
     (showProgressIdentifiers
-      ? '受け取り時は呼出番号または下のQRコードを提示してください。受け取りまで保管をお願いします。'
-      : '受け取り時は呼出番号と下のQRコードを提示してください。受け取りまで保管をお願いします。')
+      ? orderTexts.description.progressOnly
+      : orderTexts.description.default)
 
   const handleRefreshStatus = async () => {
     if (refreshing || Date.now() < cooldownUntil || cooldownRemaining > 0) return
@@ -316,11 +328,11 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
     try {
       const result = await refreshOrderResult()
       if (!result) {
-        setRefreshError('最新の注文情報を取得できませんでした。')
+        setRefreshError('refreshFailed')
       }
     } catch (err) {
       console.error(err)
-      setRefreshError('最新の注文情報を取得できませんでした。')
+      setRefreshError('refreshFailed')
     } finally {
       setRefreshing(false)
       setCooldownUntil(Date.now() + refreshCooldownMs)
@@ -330,20 +342,20 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
   const handleCopyProgressLink = async () => {
     try {
       await navigator.clipboard.writeText(summary.ticket)
-      alert('進捗確認コードをコピーしました。')
+      alert(copyTexts.progressCodeSuccess)
     } catch (err) {
       console.error(err)
-      alert('コピーに失敗しました。手動で控えてください。')
+      alert(copyTexts.progressCodeFailure)
     }
   }
 
   const handleCopyCallNumber = async () => {
     try {
       await navigator.clipboard.writeText(progressUrl)
-      alert('進捗確認用リンクをコピーしました。')
+      alert(copyTexts.progressLinkSuccess)
     } catch (err) {
       console.error(err)
-      alert('コピーに失敗しました。手動で控えてください。')
+      alert(copyTexts.progressLinkFailure)
     }
   }
 
@@ -359,17 +371,15 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
         <h1 className="section-title">{viewTitle}</h1>
         <p className="section-description">{viewDescription}</p>
 
-        {!ready && !authError && <p>匿名ログイン中です…</p>}
-        {authError && (
-          <p className="error-message">匿名認証に失敗しました。時間をおいてお試しください。</p>
-        )}
+        {!ready && !authError && <p>{authTexts.signingIn}</p>}
+        {authError && <p className="error-message">{authTexts.error}</p>}
 
         <div className="completion-order-info">
           <div className="completion-status-card">
             <div className="completion-call-number-block" aria-live="polite">
-              <span className="completion-label">呼出番号</span>
+              <span className="completion-label">{orderTexts.callNumberLabel}</span>
               <span className="completion-call-number">
-                {summary.callNumber > 0 ? summary.callNumber : '準備中'}
+                {summary.callNumber > 0 ? summary.callNumber : orderTexts.callNumberPending}
               </span>
             </div>
             <div className="payment-state">
@@ -378,7 +388,7 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
               </span>
             </div>
             <div className="completion-status-header">
-              <span className="completion-label">現在の状況</span>
+              <span className="completion-label">{orderTexts.statusHeading}</span>
               <button
                 type="button"
                 className="button secondary completion-refresh-button"
@@ -386,13 +396,15 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
                 disabled={refreshing || cooldownRemaining > 0}
               >
                 {refreshing
-                  ? '更新中…'
+                  ? orderTexts.refresh.refreshing
                   : cooldownRemaining > 0
-                    ? `再取得まで ${cooldownRemaining} 秒`
-                    : '最新情報に更新'}
+                    ? orderTexts.refresh.cooldown(cooldownRemaining)
+                    : orderTexts.refresh.action}
               </button>
             </div>
-            {refreshError && <p className="completion-refresh-error">{refreshError}</p>}
+            {refreshError && (
+              <p className="completion-refresh-error">{orderTexts.refresh.error}</p>
+            )}
             <div className="completion-progress" role="list">
               {CUSTOMER_PROGRESS_STEPS.map((step, index) => {
                 const stepClass = [
@@ -403,9 +415,11 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
                   .filter(Boolean)
                   .join(' ')
                 return (
-                  <div key={step.label} className={stepClass} role="listitem">
+                  <div key={step.key} className={stepClass} role="listitem">
                     <div className="completion-progress-node" aria-hidden="true" />
-                    <span className="completion-progress-label">{step.label}</span>
+                    <span className="completion-progress-label">
+                      {getProgressStepLabel(step.key, language)}
+                    </span>
                   </div>
                 )
               })}
@@ -427,32 +441,34 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
                   </svg>
                 </div>
                 <div className="completion-ready-copy">
-                  <p className="completion-ready-title">お渡しの準備が整いました</p>
+                  <p className="completion-ready-title">{orderTexts.readyTitle}</p>
                   <p className="completion-ready-message">{readyBannerInstruction}</p>
                   {readyPreviewEnabled && !isReadyState && (
-                    <span className="completion-ready-preview-tag">テスト表示中（後で削除）</span>
+                    <span className="completion-ready-preview-tag">
+                      {orderTexts.readyPreviewTag}
+                    </span>
                   )}
                 </div>
               </div>
             )}
           </div>
           <div className="completion-meta">
-            <h2 className="completion-subheading">注文情報</h2>
+            <h2 className="completion-subheading">{orderTexts.metaHeading}</h2>
             <dl className="completion-meta-list">
               <div>
-                <dt>合計金額</dt>
+                <dt>{orderTexts.meta.total}</dt>
                 <dd>¥{summary.total.toLocaleString()}</dd>
               </div>
               <div>
-                <dt>お支払い</dt>
-                <dd>{summary.payment}</dd>
+                <dt>{orderTexts.meta.payment}</dt>
+                <dd>{getPaymentLabel(summary.payment, language)}</dd>
               </div>
               <div>
-                <dt>準備状況</dt>
+                <dt>{orderTexts.meta.progress}</dt>
                 <dd>{displayProgress}</dd>
               </div>
               <div>
-                <dt>注文日時</dt>
+                <dt>{orderTexts.meta.orderedAt}</dt>
                 <dd>
                   {orderDateInfo.display ? (
                     <time dateTime={orderDateInfo.iso}>{orderDateInfo.display}</time>
@@ -467,19 +483,19 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
 
         {qrCode && (
           <div className="completion-qr-block">
-            <img src={qrCode} alt="進捗確認用QRコード" />
-            <span className="completion-qr-caption">このQRコードを読み取ると進捗確認ページが開きます。レジまたは状況確認時に提示してください。</span>
+            <img src={qrCode} alt={orderTexts.qrAlt} />
+            <span className="completion-qr-caption">{orderTexts.qrCaption}</span>
           </div>
         )}
 
         <div className="completion-identifiers">
           <div className="completion-order-id completion-identifier-card">
-            <span className="completion-label">注文番号</span>
+            <span className="completion-label">{orderTexts.identifiers.orderId}</span>
             <span className="completion-order-id-value">{summary.orderId}</span>
           </div>
           {showProgressIdentifiers && (
             <div className="completion-order-id completion-identifier-card">
-              <span className="completion-label">進捗確認コード</span>
+              <span className="completion-label">{orderTexts.identifiers.ticket}</span>
               <span className="completion-order-id-value" style={{ wordBreak: 'break-all' }}>
                 {summary.ticket}
               </span>
@@ -488,14 +504,14 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
         </div>
 
         <div className="completion-items">
-          <h2 className="completion-subheading">注文内容</h2>
+          <h2 className="completion-subheading">{orderTexts.itemsHeading}</h2>
           <table className="completion-items-table">
             <thead>
               <tr>
-                <th scope="col">商品</th>
-                <th scope="col">数量</th>
-                <th scope="col">単価</th>
-                <th scope="col">小計</th>
+                <th scope="col">{orderTexts.itemsTable.item}</th>
+                <th scope="col">{orderTexts.itemsTable.quantity}</th>
+                <th scope="col">{orderTexts.itemsTable.price}</th>
+                <th scope="col">{orderTexts.itemsTable.subtotal}</th>
               </tr>
             </thead>
             <tbody>
@@ -504,7 +520,7 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
                 if (!menu) return null
                 return (
                   <tr key={key}>
-                    <td>{menu.label}</td>
+                    <td>{getMenuItemLabel(menu, language)}</td>
                     <td className="numeric">{quantity}</td>
                     <td className="numeric">¥{menu.price.toLocaleString()}</td>
                     <td className="numeric">¥{(menu.price * quantity).toLocaleString()}</td>
@@ -512,7 +528,7 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
                 )
               })}
               <tr className="completion-items-total">
-                <td colSpan={3}>合計</td>
+                <td colSpan={3}>{orderTexts.itemsTable.total}</td>
                 <td className="numeric">¥{summary.total.toLocaleString()}</td>
               </tr>
             </tbody>
@@ -521,15 +537,15 @@ export function OrderCompletePage(props: OrderCompletePageProps = {}) {
 
         <div className="button-row completion-actions">
           <button type="button" className="button primary" onClick={handleCopyCallNumber}>
-            進捗確認リンクをコピー
+            {orderTexts.actions.copyLink}
           </button>
           {showProgressIdentifiers && progressUrl && (
             <button type="button" className="button secondary" onClick={handleCopyProgressLink}>
-              進捗確認コードをコピー
+              {orderTexts.actions.copyCode}
             </button>
           )}
           <button type="button" className="button secondary" onClick={handleCreateAnother}>
-            新しく注文する
+            {orderTexts.actions.startNew}
           </button>
         </div>
       </section>

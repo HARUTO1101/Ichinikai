@@ -1,10 +1,38 @@
 import { useMemo, useState } from 'react'
 import { useOrdersSubscription } from '../../../hooks/useOrdersSubscription'
 import { useMenuConfig } from '../../../hooks/useMenuConfig'
-import type { MenuItemKey, OrderDetail } from '../../../types/order'
+import { getAdminMenuLabel, type MenuItemKey, type OrderDetail } from '../../../types/order'
 
 type DashboardMode = 'default' | 'export'
 type TimeRangeOption = 'today' | 'yesterday' | '7days'
+
+type MenuCategory = 'soup' | 'friedBread' | 'smore' | 'drink'
+
+const MENU_CATEGORY_LABELS: Record<MenuCategory, string> = {
+  soup: 'スープ',
+  friedBread: '揚げパン',
+  smore: 'スモア',
+  drink: 'ドリンク',
+}
+
+const MENU_CATEGORY_ORDER: ReadonlyArray<MenuCategory> = ['soup', 'friedBread', 'smore', 'drink']
+
+const MENU_CATEGORY_BY_KEY: Record<MenuItemKey, MenuCategory> = {
+  potaufeu: 'soup',
+  minestrone: 'soup',
+  plain: 'friedBread',
+  cocoa: 'friedBread',
+  kinako: 'friedBread',
+  garlic: 'friedBread',
+  strawberry: 'smore',
+  blueberry: 'smore',
+  chocolate: 'smore',
+  honey: 'smore',
+  drink_hojicha: 'drink',
+  drink_cocoa: 'drink',
+  drink_coffee: 'drink',
+  drink_milkcoffee: 'drink',
+}
 
 interface AdminDashboardViewProps {
   mode?: DashboardMode
@@ -48,72 +76,98 @@ interface ProductStat {
   hourlyBreakdown: Array<{ hour: number; count: number; revenue: number }>
 }
 
+interface TotalsSummary {
+  totalOrders: number
+  paidOrders: number
+  totalRevenue: number
+  averageOrderValue: number
+}
+
 export function AdminDashboardView({ mode = 'default' }: AdminDashboardViewProps) {
   const [timeRange, setTimeRange] = useState<TimeRangeOption>('today')
-  const { orders, loading, error } = useOrdersSubscription()
   const { menuItems } = useMenuConfig()
 
   const { start, end } = useMemo(() => resolveTimeRange(timeRange), [timeRange])
+  const subscriptionOptions = useMemo(() => {
+    const autoStopWhen =
+      timeRange === 'today'
+        ? undefined
+        : (orders: OrderDetail[]) => orders.length > 0
 
-  const filteredOrders = useMemo(
-    () =>
-      orders.filter((order) => {
-        const timestamp = getOrderTimestamp(order)
-        if (!timestamp) return false
-        return timestamp >= start && timestamp < end
-      }),
-    [orders, start, end],
-  )
+    return { start, end, autoStopWhen }
+  }, [end, start, timeRange])
 
-  const activeOrders = useMemo(
-    () => filteredOrders.filter((order) => order.payment !== 'キャンセル'),
-    [filteredOrders],
-  )
-
-  const totals = useMemo(() => {
-    const totalRevenue = activeOrders.reduce((sum, order) => sum + (order.total ?? 0), 0)
-    const totalOrders = activeOrders.length
-    const paidOrders = activeOrders.filter((order) => order.payment === '支払い済み').length
-    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0
-    return {
-      totalRevenue,
-      totalOrders,
-      averageOrderValue,
-      paidOrders,
-    }
-  }, [activeOrders])
+  const { orders: activeOrders, loading, error } = useOrdersSubscription(subscriptionOptions)
 
   const hourlySeries = useMemo<HourlySeriesEntry[]>(() => {
-    const base = Array.from({ length: 24 }, (_, hour) => ({
+    const buckets: HourlySeriesEntry[] = Array.from({ length: 24 }, (_, hour) => ({
       hour,
       orderCount: 0,
       revenue: 0,
       cumulativeRevenue: 0,
     }))
 
-    activeOrders.forEach((order) => {
-      const timestamp = getOrderTimestamp(order)
-      if (!timestamp) return
-      const hourIndex = timestamp.getHours()
-      const bucket = base[hourIndex]
-      bucket.orderCount += 1
-      bucket.revenue += order.total ?? 0
+    if (activeOrders.length === 0) {
+      return buckets
+    }
+
+    const entries = activeOrders
+      .map((order) => ({ order, timestamp: getOrderTimestamp(order) }))
+      .filter((item): item is { order: OrderDetail; timestamp: Date } => item.timestamp != null)
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+
+    entries.forEach(({ order, timestamp }) => {
+      if (order.payment === 'キャンセル') return
+      const hour = timestamp.getHours()
+      if (hour < 0 || hour >= buckets.length) return
+      const total = Number.isFinite(order.total) ? order.total : 0
+      buckets[hour].orderCount += 1
+      buckets[hour].revenue += total
     })
 
-    let runningRevenue = 0
-    return base.map((bucket) => {
-      runningRevenue += bucket.revenue
-      return {
-        ...bucket,
-        cumulativeRevenue: runningRevenue,
-      }
+    let cumulative = 0
+    buckets.forEach((bucket) => {
+      cumulative += bucket.revenue
+      bucket.cumulativeRevenue = cumulative
     })
+
+    return buckets
   }, [activeOrders])
 
-  const peakHourlyOrders = useMemo(
-    () => hourlySeries.reduce((max, entry) => Math.max(max, entry.orderCount), 0),
-    [hourlySeries],
-  )
+  const totals = useMemo<TotalsSummary>(() => {
+    if (activeOrders.length === 0) {
+      return {
+        totalOrders: 0,
+        paidOrders: 0,
+        totalRevenue: 0,
+        averageOrderValue: 0,
+      }
+    }
+
+    let totalOrders = 0
+    let paidOrders = 0
+    let totalRevenue = 0
+
+    activeOrders.forEach((order) => {
+      if (order.payment === 'キャンセル') return
+      totalOrders += 1
+      if (order.payment === '支払い済み') {
+        paidOrders += 1
+      }
+      const orderTotal = Number.isFinite(order.total) ? order.total : 0
+      totalRevenue += orderTotal
+    })
+
+    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0
+
+    return {
+      totalOrders,
+      paidOrders,
+      totalRevenue,
+      averageOrderValue,
+    }
+  }, [activeOrders])
+
   const peakHourlyRevenue = useMemo(
     () => hourlySeries.reduce((max, entry) => Math.max(max, entry.revenue), 0),
     [hourlySeries],
@@ -121,17 +175,20 @@ export function AdminDashboardView({ mode = 'default' }: AdminDashboardViewProps
 
   const productStats = useMemo<ProductStat[]>(() => {
     return menuItems.map((item) => {
+      const adminLabel = getAdminMenuLabel(item.key, item.label)
       const hourly = Array.from({ length: 24 }, () => ({ count: 0, revenue: 0 }))
       let totalCount = 0
       let totalRevenue = 0
 
       activeOrders.forEach((order) => {
+        if (order.payment === 'キャンセル') return
         const timestamp = getOrderTimestamp(order)
         if (!timestamp) return
         const quantity = order.items[item.key] ?? 0
         if (quantity <= 0) return
 
         const hourIndex = timestamp.getHours()
+        if (hourIndex < 0 || hourIndex >= hourly.length) return
         const revenue = quantity * item.price
         hourly[hourIndex].count += quantity
         hourly[hourIndex].revenue += revenue
@@ -155,7 +212,7 @@ export function AdminDashboardView({ mode = 'default' }: AdminDashboardViewProps
 
       return {
         key: item.key,
-        label: item.label,
+        label: adminLabel,
         totalCount,
         totalRevenue,
         peakHour: peak.count > 0 ? peak.hour : null,
@@ -163,6 +220,40 @@ export function AdminDashboardView({ mode = 'default' }: AdminDashboardViewProps
       }
     })
   }, [activeOrders, menuItems])
+
+  const menuItemMap = useMemo(() => {
+    return new Map(menuItems.map((item) => [item.key, item]))
+  }, [menuItems])
+
+  const productSalesSeries = useMemo(() => {
+    return Array.from({ length: 24 }, (_, hour) => {
+      const segments = menuItems.map(({ key }) => {
+        const product = productStats.find((stat) => stat.key === key)
+        const match = product?.hourlyBreakdown.find((entry) => entry.hour === hour)
+        return {
+          key,
+          count: match?.count ?? 0,
+        }
+      })
+
+      const total = segments.reduce((sum, segment) => sum + segment.count, 0)
+      return { hour, total, segments }
+    })
+  }, [menuItems, productStats])
+
+  const productSalesSeriesWithData = useMemo(
+    () => productSalesSeries.filter((entry) => entry.total > 0),
+    [productSalesSeries],
+  )
+
+  const productSalesByHour = useMemo(() => {
+    return new Map(productSalesSeries.map((entry) => [entry.hour, entry]))
+  }, [productSalesSeries])
+
+  const peakHourlyOrders = useMemo(
+    () => productSalesSeries.reduce((max, entry) => Math.max(max, entry.total), 0),
+    [productSalesSeries],
+  )
 
   const hasData = activeOrders.length > 0
   const rangeLabel = useMemo(() => formatRangeLabel(start, end), [start, end])
@@ -289,19 +380,75 @@ export function AdminDashboardView({ mode = 'default' }: AdminDashboardViewProps
                   </tr>
                 </thead>
                 <tbody>
-                  {hourlySeries.map((entry) => (
-                    <tr key={entry.hour}>
-                      <td>{formatHourRange(entry.hour)}</td>
-                      <td>
-                        {numberFormatter.format(entry.orderCount)}
-                        <div className="admin-trend-bar orders">
-                          <span
-                            style={{
-                              width: `${peakHourlyOrders > 0 ? (entry.orderCount / peakHourlyOrders) * 100 : 0}%`,
-                            }}
-                          />
-                        </div>
-                      </td>
+                  {hourlySeries.map((entry) => {
+                    const productEntry = productSalesByHour.get(entry.hour)
+                    const segments = productEntry?.segments ?? []
+                    const categoryTotals: Record<MenuCategory, number> = {
+                      soup: 0,
+                      friedBread: 0,
+                      smore: 0,
+                      drink: 0,
+                    }
+
+                    segments.forEach((segment) => {
+                      if (!segment || segment.count === 0) return
+                      const category = MENU_CATEGORY_BY_KEY[segment.key]
+                      categoryTotals[category] += segment.count
+                    })
+                    return (
+                      <tr key={entry.hour}>
+                        <td>{formatHourRange(entry.hour)}</td>
+                        <td>
+                          <div className="admin-hourly-volume">
+                            <span className="admin-hourly-volume-count">
+                              {numberFormatter.format(entry.orderCount)} 件
+                            </span>
+                            <div
+                              className="admin-hourly-volume-bar"
+                              aria-hidden={entry.orderCount === 0}
+                            >
+                              {segments.map((segment) => {
+                                if (!segment || segment.count === 0) return null
+                                const fraction =
+                                  peakHourlyOrders > 0
+                                    ? (segment.count / peakHourlyOrders) * 100
+                                    : 0
+                                if (fraction <= 0) return null
+                                const minWidth = fraction < 4 ? '6px' : undefined
+                                const isCompactSegment = fraction < 8
+                                const menuItem = menuItemMap.get(segment.key)
+                                return (
+                                  <span
+                                    key={segment.key}
+                                    className={`admin-product-sales-segment menu-item-${segment.key}`}
+                                    style={{
+                                      width: `${fraction}%`,
+                                      flexBasis: `${fraction}%`,
+                                      minWidth,
+                                    }}
+                                    data-compact={isCompactSegment ? 'true' : undefined}
+                                    title={`${getAdminMenuLabel(segment.key, menuItem?.label ?? segment.key)}: ${numberFormatter.format(segment.count)}個`}
+                                  >
+                                    <span className="admin-product-sales-count">{segment.count}</span>
+                                  </span>
+                                )
+                              })}
+                            </div>
+                            <div className="admin-hourly-volume-category" aria-hidden={entry.orderCount === 0}>
+                              {MENU_CATEGORY_ORDER.map((category) => {
+                                const count = categoryTotals[category]
+                                return (
+                                  <span
+                                    key={category}
+                                    data-muted={count === 0 ? 'true' : undefined}
+                                  >
+                                    {MENU_CATEGORY_LABELS[category]} {numberFormatter.format(count)} 個
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </td>
                       <td>
                         {currencyFormatter.format(entry.revenue)}
                         <div className="admin-trend-bar revenue">
@@ -314,7 +461,8 @@ export function AdminDashboardView({ mode = 'default' }: AdminDashboardViewProps
                       </td>
                       <td>{currencyFormatter.format(entry.cumulativeRevenue)}</td>
                     </tr>
-                  ))}
+                  )
+                })}
                 </tbody>
               </table>
             ) : (
@@ -342,8 +490,8 @@ export function AdminDashboardView({ mode = 'default' }: AdminDashboardViewProps
                   </thead>
                   <tbody>
                     {productStats.map((product) => (
-                      <tr key={product.key}>
-                        <td>{product.label}</td>
+                      <tr key={product.key} className={`menu-item-${product.key}`}>
+                        <td className="admin-product-name">{product.label}</td>
                         <td>{numberFormatter.format(product.totalCount)} 個</td>
                         <td>{currencyFormatter.format(product.totalRevenue)}</td>
                         <td>{product.peakHour != null ? formatHourRange(product.peakHour) : '—'}</td>
@@ -352,6 +500,51 @@ export function AdminDashboardView({ mode = 'default' }: AdminDashboardViewProps
                   </tbody>
                 </table>
 
+                {productSalesSeriesWithData.length > 0 && (
+                  <div className="admin-product-sales-chart" role="img" aria-label="時間帯別の商品別販売数">
+                    <div className="admin-product-sales-header">
+                      <h4>時間帯別 販売個数の内訳</h4>
+                      <div className="admin-product-sales-legend" aria-hidden="true">
+                        {menuItems.map((item) => (
+                          <span
+                            key={item.key}
+                            className={`admin-product-sales-legend-item menu-item-${item.key}`}
+                          >
+                            <span className="admin-product-sales-legend-swatch" />
+                            {getAdminMenuLabel(item.key, item.label)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="admin-product-sales-rows">
+                      {productSalesSeriesWithData.map((entry) => (
+                        <div key={entry.hour} className="admin-product-sales-row">
+                          <div className="admin-product-sales-hour">{formatHourRange(entry.hour)}</div>
+                          <div className="admin-product-sales-bar" aria-hidden={entry.total === 0}>
+                            {entry.segments.map((segment) => {
+                              if (segment.count === 0) return null
+                              const percentage = (segment.count / entry.total) * 100
+                              const minWidth = percentage < 6 ? '6px' : undefined
+                              const menuItem = menuItemMap.get(segment.key)
+                              return (
+                                <span
+                                  key={segment.key}
+                                  className={`admin-product-sales-segment menu-item-${segment.key}`}
+                                  style={{ width: `${percentage}%`, flexBasis: `${percentage}%`, minWidth }}
+                                  title={`${getAdminMenuLabel(segment.key, menuItem?.label ?? segment.key)}: ${numberFormatter.format(segment.count)}個`}
+                                >
+                                  <span className="admin-product-sales-count">{segment.count}</span>
+                                </span>
+                              )
+                            })}
+                          </div>
+                          <div className="admin-product-sales-total">{numberFormatter.format(entry.total)} 個</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="admin-product-breakdown">
                   {productStats.every((stat) => stat.hourlyBreakdown.length === 0) ? (
                     <p className="admin-empty-inline">商品別の販売データがありません。</p>
@@ -359,7 +552,10 @@ export function AdminDashboardView({ mode = 'default' }: AdminDashboardViewProps
                     productStats
                       .filter((stat) => stat.hourlyBreakdown.length > 0)
                       .map((stat) => (
-                        <details key={stat.key} className="admin-product-breakdown-item">
+                        <details
+                          key={stat.key}
+                          className={`admin-product-breakdown-item menu-item-${stat.key}`}
+                        >
                           <summary>{stat.label} の時間帯別内訳</summary>
                           <table>
                             <thead>

@@ -56,7 +56,14 @@ interface CategoryOrderGroup {
 type CategoryOrderMap = Record<PlatingCategoryKey, CategoryOrderGroup>
 
 export function AdminProductionView() {
-  const { orders: rawOrders, loading, error } = useOrdersSubscription()
+  const subscriptionOptions = useMemo(() => {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
+    return { start, end }
+  }, [])
+  const { orders: rawOrders, loading, error } = useOrdersSubscription(subscriptionOptions)
   const rows = useMemo(() => rawOrders.map(mapOrderDetailToRow), [rawOrders])
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [platingUpdatingKey, setPlatingUpdatingKey] = useState<string | null>(null)

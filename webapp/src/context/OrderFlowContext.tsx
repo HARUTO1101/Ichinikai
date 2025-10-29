@@ -28,6 +28,7 @@ import {
 } from '../types/order'
 import { buildTicketUrl, extractTicketFromInput } from '../utils/ticket'
 import { ensurePlatingProgress } from '../utils/plating'
+import type { OrderErrorKey } from '../i18n/order'
 
 interface CartItemView {
   item: MenuItem
@@ -70,8 +71,8 @@ interface OrderFlowContextValue {
   total: number
   hasItems: boolean
   loading: boolean
-  error: string | null
-  setError: Dispatch<SetStateAction<string | null>>
+  error: OrderErrorKey | null
+  setError: Dispatch<SetStateAction<OrderErrorKey | null>>
   confirmOrder: () => Promise<OrderSummary | null>
   orderResult: OrderResultPayload | null
   clearOrderResult: () => void
@@ -95,7 +96,7 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
   const { menuItems } = useMenuConfig()
   const [items, setItems] = useState<Record<MenuItemKey, number>>(createInitialQuantities)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<OrderErrorKey | null>(null)
   const [orderResult, setOrderResult] = useState<OrderResultPayload | null>(null)
 
   const updateQuantity = useCallback((key: MenuItemKey, nextValue: number) => {
@@ -138,7 +139,7 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
     if (loading) return null
 
     if (!hasItems) {
-      setError('商品を1点以上ご注文ください。')
+      setError('EMPTY_CART')
       return null
     }
 
@@ -158,8 +159,8 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
       }
       return summary
     } catch (err) {
-      console.error(err)
-      setError('注文処理に失敗しました。通信環境をご確認ください。')
+  console.error(err)
+  setError('ORDER_FAILED')
       return null
     } finally {
       setLoading(false)

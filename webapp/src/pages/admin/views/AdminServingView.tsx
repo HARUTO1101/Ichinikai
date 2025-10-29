@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } f
 import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
 import { useOrdersSubscription } from '../../../hooks/useOrdersSubscription'
 import { updateOrderStatus } from '../../../services/orders'
+import type { OrderDetail } from '../../../types/order'
 import { getOrderConfirmationCode, mapOrderDetailToRow, type OrderRow } from './adminOrdersData'
 import { buildOrderItemEntries, OrderItemsInline } from './adminOrderItems'
 
@@ -43,7 +44,21 @@ function formatElapsedLabel(createdAt: string, reference: Date): string | null {
 }
 
 export function AdminServingView() {
-  const { orders: rawOrders, loading, error } = useOrdersSubscription()
+  const subscriptionOptions = useMemo(() => {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
+    return { start, end }
+  }, [])
+  const autoStopWhen = useCallback(
+    (orders: OrderDetail[]) => orders.length > 0 && orders.every((order) => order.progress === 'クローズ'),
+    [],
+  )
+  const { orders: rawOrders, loading, error } = useOrdersSubscription({
+    ...subscriptionOptions,
+    autoStopWhen,
+  })
   const orders = useMemo(() => rawOrders.map(mapOrderDetailToRow), [rawOrders])
   const [searchQuery, setSearchQuery] = useState('')
   const [isScannerOpen, setScannerOpen] = useState(false)

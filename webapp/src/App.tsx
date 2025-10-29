@@ -1,4 +1,4 @@
-import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AdminPage } from './pages/AdminPage'
 import { StatusPage } from './pages/StatusPage'
 import { OrderFlowProvider } from './context/OrderFlowContext'
@@ -11,93 +11,95 @@ import { TicketNotFoundPage } from './pages/TicketNotFoundPage'
 import { KitchenDashboardPage } from './pages/KitchenDashboardPage'
 import { OrderToastViewport } from './components/OrderToastViewport'
 import { RoleGuard } from './components/auth/RoleGuard'
+import { type SupportedLanguage, useLanguage } from './context/LanguageContext'
+import { ORDER_TEXT } from './i18n/order'
 import './App.css'
 
-const navItems = [
-  { to: '/admin', label: '管理者ページ' },
-  { to: '/kitchen', label: 'キッチン用' },
-]
-
-const actionItems = (
-  [
-    { to: '/order', label: '注文する', variant: 'primary' },
-  ] as const
-)
-
 function NotFound() {
+  const { language } = useLanguage()
+  const texts = ORDER_TEXT[language]
   return (
     <div className="not-found">
-      <h1>ページが見つかりません</h1>
-      <p>URLをご確認のうえ、ナビゲーションから移動してください。</p>
+      <h1>{texts.notFound.title}</h1>
+      <p>{texts.notFound.description}</p>
     </div>
   )
 }
 
 function App() {
   const location = useLocation()
+  const { language, setLanguage } = useLanguage()
   const isAdminRoute = location.pathname.startsWith('/admin')
   const isKitchenRoute = location.pathname.startsWith('/kitchen')
   const shouldShowToasts = isAdminRoute || isKitchenRoute
+  const viewLanguage = isAdminRoute || isKitchenRoute ? 'ja' : language
+  const texts = ORDER_TEXT[viewLanguage]
+  const toggleTexts = ORDER_TEXT[language].languageToggle
   const shellClassName = ['app-shell', isAdminRoute ? 'app-shell--wide' : '']
     .filter(Boolean)
     .join(' ')
   const toastVariant = isAdminRoute ? 'light' : 'dark'
+  const showLanguageToggle = !isAdminRoute && !isKitchenRoute
+  const isPublicView = showLanguageToggle
+  const brandSubtitle = viewLanguage === 'en' ? 'Mobile ordering system' : 'モバイル注文システム'
+  const nextLanguage: SupportedLanguage = language === 'ja' ? 'en' : 'ja'
+  const handleLanguageToggle = () => {
+    setLanguage(nextLanguage)
+  }
 
   return (
     <OrderToastProvider>
       <OrderFlowProvider>
         <div className={shellClassName}>
-          <header className="app-header">
-          <div className="brand">
-            <span aria-hidden="true" className="brand-icon">
-              🧇
-            </span>
-            <div className="brand-text">
-              <span className="brand-title">学園祭キッチンカー</span>
-              <span className="brand-subtitle">モバイル注文システム</span>
-            </div>
-          </div>
-          <div className="header-right">
-            {navItems.length > 0 && (
-              <nav className="main-nav" aria-label="主要メニュー">
-                <ul>
-                  {navItems.map((item) => (
-                    <li key={item.to}>
-                      <NavLink
-                        to={item.to}
-                        className={({ isActive }) =>
-                          isActive ? 'nav-link active' : 'nav-link'
-                        }
+          <header
+            className={[
+              'app-header',
+              isPublicView ? 'app-header--public' : 'app-header--internal',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            {isPublicView ? (
+              <div className="header-row">
+                <div className="header-brand-group">
+                  <img
+                    className="header-brand-character"
+                    src="/header/キャラクターイラスト.png"
+                    alt={texts.header.characterAlt}
+                  />
+                  <div className="header-title-block">
+                    <img
+                      className="header-title-image"
+                      src="/header/ヘッダータイトル.png"
+                      alt={texts.header.titleAlt}
+                    />
+                    {showLanguageToggle && (
+                      <button
+                        type="button"
+                        className="language-switch"
+                        onClick={handleLanguageToggle}
+                        aria-label={toggleTexts.buttonAria(nextLanguage)}
                       >
-                        {item.label}
-                      </NavLink>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
+                        {toggleTexts.buttonText}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="header-internal">
+                <div className="brand">
+                  <span aria-hidden="true" className="brand-icon">
+                    🧇
+                  </span>
+                  <div className="brand-text">
+                    <span className="brand-title">学園祭キッチンカー</span>
+                    <span className="brand-subtitle">{brandSubtitle}</span>
+                  </div>
+                </div>
+              </div>
             )}
-            <div className="header-actions" role="group" aria-label="注文操作">
-              {actionItems.map((action) => (
-                <NavLink
-                  key={action.to}
-                  to={action.to}
-                  className={({ isActive }) =>
-                    [
-                      'button',
-                      'header-action',
-                      action.variant,
-                      isActive ? 'active' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')
-                  }
-                >
-                  {action.label}
-                </NavLink>
-              ))}
-            </div>
-          </div>
-        </header>
+          </header>
           <main className="app-main">
             <Routes>
               <Route path="/" element={<Navigate to="/order" replace />} />
@@ -138,7 +140,7 @@ function App() {
           </main>
           <footer className="app-footer">
             <p>
-              &copy; {new Date().getFullYear()} 学園祭キッチンカー実行委員会. All rights
+              &copy; {new Date().getFullYear()} Hakuto Tanaka and Haruto Otsuka. All rights
               reserved.
             </p>
           </footer>

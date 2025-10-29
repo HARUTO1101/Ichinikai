@@ -4,6 +4,16 @@ export type MenuItemKey =
   | 'cocoa'
   | 'kinako'
   | 'garlic'
+  | 'drink_hojicha'
+  | 'drink_cocoa'
+  | 'drink_coffee'
+  | 'drink_milkcoffee'
+  | 'minestrone'
+  | 'strawberry'
+  | 'blueberry'
+  | 'chocolate'
+  | 'honey'
+  
 
 export type PaymentStatus = '未払い' | '支払い済み' | 'キャンセル'
 export type ProgressStatus = '受注済み' | '調理済み' | 'クローズ'
@@ -55,7 +65,9 @@ export interface MenuItem {
   allergens: ReadonlyArray<AllergenKey>
 }
 
-export const MENU_ITEMS: Record<MenuItemKey, MenuItem> = {
+export type MenuVariantKey = 'day12' | 'day34'
+
+const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
   potaufeu: {
     key: 'potaufeu',
     label: 'ポトフ',
@@ -96,9 +108,149 @@ export const MENU_ITEMS: Record<MenuItemKey, MenuItem> = {
     image: '/menu_photo/4.png',
     allergens: ['wheat'],
   },
+  drink_hojicha: {
+    key: 'drink_hojicha',
+    label: 'ほうじ茶(温)',
+    description: '香ばしいほうじ茶でほっと一息',
+    price: 150,
+    image: '/menu_photo/6.png',
+    allergens: [],
+  },
+  drink_cocoa: {
+    key: 'drink_cocoa',
+    label: 'ココア(温)',
+    description: '甘くて濃厚なココアでほっと一息',
+    price: 150,
+    image: '/menu_photo/7.png',
+    allergens: [],
+  },
+  drink_coffee: {
+    key: 'drink_coffee',
+    label: 'コーヒー(温)',
+    description: '香り高いホットコーヒーでリフレッシュ',
+    price: 150,
+    image: '/menu_photo/8.png',
+    allergens: [],
+  },
+  drink_milkcoffee: {
+    key: 'drink_milkcoffee',
+    label: 'コーヒー牛乳(冷)',
+    description: 'ミルクたっぷりのまろやかなホットコーヒー',
+    price: 150,
+    image: '/menu_photo/9.png',
+    allergens: [],
+  },
+  minestrone: {
+    key: 'minestrone',
+    label: 'ミネストローネ',
+    description: 'トマトベースの具だくさんスープで体ぽかぽか',
+    price: 320,
+    image: '/menu_photo/5.png',
+    allergens: ['soy'],
+  },
+  strawberry: {
+    key: 'strawberry',
+    label: 'スモア(いちごジャム味)',
+    description: '甘酸っぱいいちごジャムとマシュマロのハーモニー',
+    price: 250,
+    image: '/menu_photo/1.png',
+    allergens: ['wheat', 'egg'],
+  },
+  blueberry: {
+    key: 'blueberry',
+    label: 'スモア(ブルーベリージャム味)',
+    description: '甘酸っぱいブルーベリージャムとマシュマロのハーモニー',
+    price: 250,
+    image: '/menu_photo/2.png',
+    allergens: ['wheat', 'egg', 'soy'],
+  },
+  chocolate: {
+    key: 'chocolate',
+    label: 'スモア(チョコ味)',
+    description: '濃厚チョコレートソースとマシュマロのハーモニー',
+    price: 250,
+    image: '/menu_photo/3.png',
+    allergens: ['wheat', 'soy'],
+  },
+  honey: {
+    key: 'honey',
+    label: 'スモア(はちみつ味)',
+    description: '香ばしいはちみつとマシュマロのハーモニー',
+    price: 250,
+    image: '/menu_photo/4.png',
+    allergens: ['wheat'],
+  },
 }
 
-export const MENU_ITEM_LIST: MenuItem[] = Object.values(MENU_ITEMS)
+export const MENU_ITEM_SHORT_LABELS: Partial<Record<MenuItemKey, string>> = {
+  potaufeu: 'ポトフ',
+  minestrone: 'ミネスト',
+  plain: 'プレーン',
+  cocoa: 'ココア',
+  kinako: 'きなこ',
+  garlic: 'ガーリック',
+  strawberry: 'いちご',
+  blueberry: 'ブルーベリー',
+  chocolate: 'チョコ',
+  honey: 'はちみつ',
+  drink_hojicha: 'ほうじ茶',
+  drink_cocoa: 'ココア(飲)',
+  drink_coffee: 'コーヒー',
+  drink_milkcoffee: 'コーヒー牛乳',
+}
+
+export const getAdminMenuLabel = (key: MenuItemKey, fallback: string): string =>
+  MENU_ITEM_SHORT_LABELS[key] ?? fallback
+
+const MENU_VARIANT_ITEM_KEYS: Record<MenuVariantKey, ReadonlyArray<MenuItemKey>> = {
+  day12: [
+    'potaufeu',
+    'plain',
+    'cocoa',
+    'kinako',
+    'garlic',
+    'drink_hojicha',
+    'drink_cocoa',
+    'drink_coffee',
+    'drink_milkcoffee',
+  ],
+  day34: [
+    'minestrone',
+    'strawberry',
+    'blueberry',
+    'chocolate',
+    'honey',
+    'drink_hojicha',
+    'drink_cocoa',
+    'drink_coffee',
+    'drink_milkcoffee',
+  ],
+}
+
+const FALLBACK_MENU_VARIANT: MenuVariantKey = 'day12'
+
+const isMenuVariantKey = (value: string): value is MenuVariantKey =>
+  value === 'day12' || value === 'day34'
+
+const envMenuVariant = (import.meta.env.VITE_MENU_VARIANT as string | undefined)?.toLowerCase()
+
+const resolvedMenuVariant: MenuVariantKey = envMenuVariant && isMenuVariantKey(envMenuVariant)
+  ? envMenuVariant
+  : FALLBACK_MENU_VARIANT
+
+export const ACTIVE_MENU_VARIANT: MenuVariantKey = resolvedMenuVariant
+
+export const ACTIVE_MENU_ITEM_KEYS: ReadonlyArray<MenuItemKey> = MENU_VARIANT_ITEM_KEYS[resolvedMenuVariant]
+
+export const MENU_ITEMS: Record<MenuItemKey, MenuItem> = ACTIVE_MENU_ITEM_KEYS.reduce(
+  (acc, key) => {
+    acc[key] = MENU_ITEM_DEFINITIONS[key]
+    return acc
+  },
+  {} as Record<MenuItemKey, MenuItem>,
+)
+
+export const MENU_ITEM_LIST: MenuItem[] = ACTIVE_MENU_ITEM_KEYS.map((key) => MENU_ITEM_DEFINITIONS[key])
 
 export const PAYMENT_STATUSES: PaymentStatus[] = ['未払い', '支払い済み', 'キャンセル']
 
@@ -140,4 +292,14 @@ export interface OrderDetail extends OrderLookupResult {
 export interface KitchenOrdersQuery {
   start?: Date
   end?: Date
+}
+
+export interface OrdersQueryOptions {
+  start?: Date
+  end?: Date
+  limit?: number
+}
+
+export interface OrdersSubscriptionOptions extends OrdersQueryOptions {
+  autoStopWhen?: (orders: OrderDetail[]) => boolean
 }
