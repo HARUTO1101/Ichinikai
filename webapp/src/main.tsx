@@ -6,9 +6,11 @@ import App from './App.tsx'
 import { AuthProvider } from './context/AuthContext'
 import { LanguageProvider } from './context/LanguageContext'
 
+const BASENAME = import.meta.env.BASE_URL ?? '/'
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={BASENAME}>
       <AuthProvider>
         <LanguageProvider>
           <App />

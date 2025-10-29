@@ -7,7 +7,7 @@ import {
   type DocumentData,
   type DocumentReference,
 } from 'firebase/firestore'
-import { auth, db, isMockMode } from '../lib/firebase'
+import { auth, db, ensureAnonymousUser, isMockMode } from '../lib/firebase'
 import { MENU_ITEMS, type MenuItem, type MenuItemKey } from '../types/order'
 
 interface MenuOverride {
@@ -183,6 +183,7 @@ const initializeRemoteSync = () => {
 
   void (async () => {
     try {
+      await ensureAnonymousUser()
       const snapshot = await getDoc(menuConfigDocRef)
       if (!snapshot.exists()) {
         if (!overridesEqual(overrides, {})) {

@@ -667,4 +667,3 @@ function buildSummaryPlatingUpdates(order: OrderRow, ready: boolean): Partial<Pl
   })
   return updates
 }
-

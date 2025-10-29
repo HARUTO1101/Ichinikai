@@ -4,6 +4,7 @@ import { useOrdersSubscription } from '../../../hooks/useOrdersSubscription'
 import { updateOrderStatus } from '../../../services/orders'
 import type { OrderDetail } from '../../../types/order'
 import { getOrderConfirmationCode, mapOrderDetailToRow, type OrderRow } from './adminOrdersData'
+import { extractTicketFromInput } from '../../../utils/ticket'
 import { buildOrderItemEntries, OrderItemsInline } from './adminOrderItems'
 
 function resolveOrderTimestamp(createdAt: string, reference: Date): Date | null {
@@ -59,7 +60,10 @@ export function AdminServingView() {
     ...subscriptionOptions,
     autoStopWhen,
   })
-  const orders = useMemo(() => rawOrders.map(mapOrderDetailToRow), [rawOrders])
+  const orders = useMemo(
+    () => rawOrders.filter((order) => order.payment !== 'キャンセル').map(mapOrderDetailToRow),
+    [rawOrders],
+  )
   const [searchQuery, setSearchQuery] = useState('')
   const [isScannerOpen, setScannerOpen] = useState(false)
   const [scannerError, setScannerError] = useState<string | null>(null)
@@ -221,15 +225,34 @@ export function AdminServingView() {
     const text = value.trim()
     if (!text) return
 
-    const match = orders.find(
-      (order) =>
-        order.ticket.toLowerCase() === text.toLowerCase() ||
-        order.id.toLowerCase() === text.toLowerCase() ||
-        getOrderConfirmationCode(order.id).toLowerCase() === text.toLowerCase() ||
-        order.callNumber.toString() === text,
-    )
+    const extractedTicket = extractTicketFromInput(text)
+    const normalizedCandidates = new Set<string>()
+    const pushCandidate = (candidate: string | null | undefined) => {
+      const trimmed = candidate?.trim()
+      if (!trimmed) return
+      normalizedCandidates.add(trimmed.toLowerCase())
+      normalizedCandidates.add(trimmed.replace(/[^0-9a-z]/gi, '').toLowerCase())
+    }
 
-    setSearchQuery(text)
+    pushCandidate(text)
+    text.split(/[\s,;]+/).forEach((segment) => pushCandidate(segment))
+    pushCandidate(extractedTicket)
+    extractedTicket
+      .split(/[\s,;]+/)
+      .forEach((segment) => pushCandidate(segment))
+
+    const match = orders.find((order) => {
+      const confirmation = getOrderConfirmationCode(order.id)
+      const candidates = [
+        order.ticket,
+        order.id,
+        confirmation,
+        order.callNumber.toString(),
+      ]
+      return candidates.some((candidate) => normalizedCandidates.has(candidate.toLowerCase()))
+    })
+
+    setSearchQuery(extractedTicket || text)
     setHighlightedId(match?.id ?? null)
     setScannerError(
       match

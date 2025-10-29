@@ -13,7 +13,11 @@ import { OrderToastViewport } from './components/OrderToastViewport'
 import { RoleGuard } from './components/auth/RoleGuard'
 import { type SupportedLanguage, useLanguage } from './context/LanguageContext'
 import { ORDER_TEXT } from './i18n/order'
+import { withBase } from './utils/assets'
 import './App.css'
+
+const HEADER_CHARACTER_SRC = withBase('header/character_illust.png')
+const HEADER_TITLE_SRC = withBase('header/header_title.png')
 
 function NotFound() {
   const { language } = useLanguage()
@@ -64,13 +68,13 @@ function App() {
                 <div className="header-brand-group">
                   <img
                     className="header-brand-character"
-                    src="/header/キャラクターイラスト.png"
+                    src={HEADER_CHARACTER_SRC}
                     alt={texts.header.characterAlt}
                   />
                   <div className="header-title-block">
                     <img
                       className="header-title-image"
-                      src="/header/ヘッダータイトル.png"
+                      src={HEADER_TITLE_SRC}
                       alt={texts.header.titleAlt}
                     />
                     {showLanguageToggle && (

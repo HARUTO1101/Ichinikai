@@ -1,3 +1,5 @@
+import { withBase } from '../utils/assets'
+
 export type MenuItemKey =
   | 'potaufeu'
   | 'plain'
@@ -40,17 +42,17 @@ export const ALLERGENS: Record<AllergenKey, AllergenMeta> = {
   wheat: {
     key: 'wheat',
     label: '小麦',
-    icon: '/allergy_icon/Wheat.png',
+    icon: withBase('allergy_icon/Wheat.png'),
   },
   egg: {
     key: 'egg',
     label: '卵',
-    icon: '/allergy_icon/Egg.png',
+    icon: withBase('allergy_icon/Egg.png'),
   },
   soy: {
     key: 'soy',
     label: '大豆',
-    icon: '/allergy_icon/Soy.png',
+    icon: withBase('allergy_icon/Soy.png'),
   },
 }
 
@@ -73,7 +75,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: 'ポトフ',
     description: '野菜たっぷりの温かいスープでほっと一息',
     price: 250,
-    image: '/menu_photo/5.png',
+    image: withBase('menu_photo/5.png'),
     allergens: ['soy'],
   },
   plain: {
@@ -81,7 +83,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: '揚げパン(プレーン)',
     description: 'あつあつの揚げパンに砂糖をまぶしました',
     price: 250,
-    image: '/menu_photo/1.png',
+    image: withBase('menu_photo/1.png'),
     allergens: ['wheat', 'egg'],
   },
   cocoa: {
@@ -89,7 +91,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: '揚げパン(ココア)',
     description: 'ビターなココアパウダーとチョコソース',
     price: 250,
-    image: '/menu_photo/2.png',
+    image: withBase('menu_photo/2.png'),
     allergens: ['wheat', 'egg', 'soy'],
   },
   kinako: {
@@ -97,7 +99,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: '揚げパン(きなこ)',
     description: '国産きなこと黒蜜の和風仕立て',
     price: 250,
-    image: '/menu_photo/3.png',
+    image: withBase('menu_photo/3.png'),
     allergens: ['wheat', 'soy'],
   },
   garlic: {
@@ -105,7 +107,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: '揚げパン(ガーリック)',
     description: '揚げたてポテトにガーリックソルトを効かせました',
     price: 250,
-    image: '/menu_photo/4.png',
+    image: withBase('menu_photo/4.png'),
     allergens: ['wheat'],
   },
   drink_hojicha: {
@@ -113,7 +115,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: 'ほうじ茶(温)',
     description: '香ばしいほうじ茶でほっと一息',
     price: 150,
-    image: '/menu_photo/6.png',
+    image: withBase('menu_photo/6.png'),
     allergens: [],
   },
   drink_cocoa: {
@@ -121,7 +123,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: 'ココア(温)',
     description: '甘くて濃厚なココアでほっと一息',
     price: 150,
-    image: '/menu_photo/7.png',
+    image: withBase('menu_photo/7.png'),
     allergens: [],
   },
   drink_coffee: {
@@ -129,7 +131,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: 'コーヒー(温)',
     description: '香り高いホットコーヒーでリフレッシュ',
     price: 150,
-    image: '/menu_photo/8.png',
+    image: withBase('menu_photo/8.png'),
     allergens: [],
   },
   drink_milkcoffee: {
@@ -137,7 +139,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: 'コーヒー牛乳(冷)',
     description: 'ミルクたっぷりのまろやかなホットコーヒー',
     price: 150,
-    image: '/menu_photo/9.png',
+    image: withBase('menu_photo/9.png'),
     allergens: [],
   },
   minestrone: {
@@ -145,7 +147,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: 'ミネストローネ',
     description: 'トマトベースの具だくさんスープで体ぽかぽか',
     price: 320,
-    image: '/menu_photo/5.png',
+    image: withBase('menu_photo/5.png'),
     allergens: ['soy'],
   },
   strawberry: {
@@ -153,7 +155,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: 'スモア(いちごジャム味)',
     description: '甘酸っぱいいちごジャムとマシュマロのハーモニー',
     price: 250,
-    image: '/menu_photo/1.png',
+    image: withBase('menu_photo/1.png'),
     allergens: ['wheat', 'egg'],
   },
   blueberry: {
@@ -161,7 +163,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: 'スモア(ブルーベリージャム味)',
     description: '甘酸っぱいブルーベリージャムとマシュマロのハーモニー',
     price: 250,
-    image: '/menu_photo/2.png',
+    image: withBase('menu_photo/2.png'),
     allergens: ['wheat', 'egg', 'soy'],
   },
   chocolate: {
@@ -169,7 +171,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: 'スモア(チョコ味)',
     description: '濃厚チョコレートソースとマシュマロのハーモニー',
     price: 250,
-    image: '/menu_photo/3.png',
+    image: withBase('menu_photo/3.png'),
     allergens: ['wheat', 'soy'],
   },
   honey: {
@@ -177,7 +179,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     label: 'スモア(はちみつ味)',
     description: '香ばしいはちみつとマシュマロのハーモニー',
     price: 250,
-    image: '/menu_photo/4.png',
+    image: withBase('menu_photo/4.png'),
     allergens: ['wheat'],
   },
 }
