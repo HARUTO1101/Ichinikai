@@ -37,18 +37,28 @@ export function AdminSettingsView() {
     resetMenuItem,
     resetAllMenuItems,
   } = useMenuConfig()
-  const [drafts, setDrafts] = useState<Record<MenuItemKey, MenuDraft>>({})
-  const [itemFeedback, setItemFeedback] = useState<Record<MenuItemKey, FeedbackMessage | null>>({})
+  const buildDraftMap = () =>
+    Object.entries(baseMenuItemMap).reduce((acc, [key, item]) => {
+      acc[key as MenuItemKey] = { label: item.label, price: String(item.price) }
+      return acc
+    }, {} as Record<MenuItemKey, MenuDraft>)
+
+  const buildFeedbackMap = () =>
+    Object.keys(baseMenuItemMap).reduce((acc, key) => {
+      acc[key as MenuItemKey] = null
+      return acc
+    }, {} as Record<MenuItemKey, FeedbackMessage | null>)
+
+  const [drafts, setDrafts] = useState<Record<MenuItemKey, MenuDraft>>(() => buildDraftMap())
+  const [itemFeedback, setItemFeedback] = useState<Record<MenuItemKey, FeedbackMessage | null>>(
+    () => buildFeedbackMap(),
+  )
   const [globalFeedback, setGlobalFeedback] = useState<FeedbackMessage | null>(null)
 
   useEffect(() => {
-    setDrafts(
-      menuItems.reduce((acc, item) => {
-        acc[item.key] = { label: item.label, price: String(item.price) }
-        return acc
-      }, {} as Record<MenuItemKey, MenuDraft>),
-    )
-  }, [menuItems])
+    setDrafts(buildDraftMap())
+    setItemFeedback(buildFeedbackMap())
+  }, [menuItems, baseMenuItemMap])
 
   const handleDraftChange = (key: MenuItemKey, field: keyof MenuDraft, value: string) => {
     setDrafts((prev) => ({
@@ -163,13 +173,8 @@ export function AdminSettingsView() {
 
     try {
       await resetAllMenuItems()
-      setDrafts(
-        Object.entries(baseMenuItemMap).reduce((acc, [key, item]) => {
-          acc[key as MenuItemKey] = { label: item.label, price: String(item.price) }
-          return acc
-        }, {} as Record<MenuItemKey, MenuDraft>),
-      )
-  setItemFeedback(() => ({} as Record<MenuItemKey, FeedbackMessage | null>))
+      setDrafts(buildDraftMap())
+      setItemFeedback(buildFeedbackMap())
       setGlobalFeedback({ type: 'success', message: '全てのメニューを初期設定に戻しました。' })
     } catch (error) {
       console.error('メニュー設定の全リセットに失敗しました', error)
