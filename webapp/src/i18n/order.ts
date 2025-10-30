@@ -14,23 +14,23 @@ export type ProgressStepKey = 'received' | 'ready' | 'completed'
 const MENU_ITEM_TEXT_EN: Record<MenuItemKey, { label: string; description: string }> = {
   potaufeu: {
     label: 'Pot-au-feu',
-    description: 'A hearty vegetable stew served warm.',
+    description: 'Packed with fresh ginger to warm you from the inside out. Take a sip and let this hearty soup comfort you.',
   },
   plain: {
     label: 'Fried Bread (Plain)',
-    description: 'Freshly fried bread coated with sugar.',
+    description: 'The timeless classic. Get ready to fall into the world of fried bread—simple, irresistible, and unforgettable.',
   },
   cocoa: {
     label: 'Fried Bread (Cocoa)',
-    description: 'Rich cocoa powder finished with chocolate sauce.',
+    description: 'Fried bread meets cocoa—there’s no way this could go wrong. One bite and you’ll be hooked.',
   },
   kinako: {
     label: 'Fried Bread (Kinako)',
-    description: 'Roasted soybean flour with sweet kuromitsu syrup.',
+    description: 'A nostalgic taste straight from Japanese school lunches. The beloved kinako fried bread is back.',
   },
   garlic: {
     label: 'Fried Bread (Garlic)',
-    description: 'Crispy fried bread seasoned with garlic salt.',
+    description: 'Who said fried bread has to be sweet? This savory twist will change the way you think about it.',
   },
   drink_hojicha: {
     label: 'Roasted Green Tea (Hot)',
@@ -50,23 +50,23 @@ const MENU_ITEM_TEXT_EN: Record<MenuItemKey, { label: string; description: strin
   },
   minestrone: {
     label: 'Minestrone',
-    description: 'Tomato-based soup packed with vegetables.',
+    description: 'A hearty Italian classic, brimming with vegetables and warmth. Enjoy the full goodness of tomatoes—nature’s own beauty elixir.',
   },
   strawberry: {
     label: "S'more (Strawberry Jam)",
-    description: 'Toasted marshmallow with tangy strawberry jam.',
+    description: 'Love probably tastes like this—sweet, slightly tart, and a little bit nostalgic.',
   },
   blueberry: {
     label: "S'more (Blueberry Jam)",
-    description: 'Blueberry jam paired with toasted marshmallow.',
+    description: 'A refreshing mix of sweetness and tanginess to wake you up—perfect for beating that post-lunch slump.',
   },
   chocolate: {
     label: "S'more (Chocolate)",
-    description: 'Rich chocolate sauce with marshmallow.',
+    description: 'When in doubt, go with chocolate. In life and in s’mores, chocolate never fails.',
   },
   honey: {
     label: "S'more (Honey)",
-    description: 'Toasted marshmallow finished with golden honey.',
+    description: 'A sweet little rescue for your tired self. Even the bees would be jealous.',
   },
 }
 
@@ -164,6 +164,8 @@ export const ORDER_TEXT = {
       imageAlt: (label: string) => `${label}のイメージ`,
       allergensLabel: (label: string) => `${label}に含まれる特定原材料表示`,
       quantityLabel: (label: string) => `${label}の数量`,
+      soldOutBadge: '売り切れ',
+      soldOutMessage: 'ただいま売り切れです。',
     },
     orderReview: {
       title: '注文内容を確認',
@@ -180,9 +182,9 @@ export const ORDER_TEXT = {
       confirming: '確定中…',
     },
     wasteGuide: {
-      title: 'ごみ分別のお願い',
+      title: '【ごみの分別回収ご協力のお願い】',
       description:
-        'こちらは仮の説明です。実際の分別ルールや回収場所の画像・文章を後ほど差し替えてください。',
+        'ごみは教育学部棟玄関近くにあるごみ箱に紙皿と割り箸を分けて捨ててください！！ご協力お願いいたします',
       placeholder: '分別案内の画像をここに配置してください',
       confirm: '分別ルールを確認した',
     },
@@ -341,6 +343,8 @@ export const ORDER_TEXT = {
       imageAlt: (label: string) => `Image of ${label}`,
       allergensLabel: (label: string) => `Allergen information for ${label}`,
       quantityLabel: (label: string) => `Quantity for ${label}`,
+      soldOutBadge: 'Sold out',
+      soldOutMessage: 'Currently unavailable.',
     },
     orderReview: {
       title: 'Review your order',

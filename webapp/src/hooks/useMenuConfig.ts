@@ -15,7 +15,7 @@ interface UseMenuConfigResult {
   menuItemMap: Record<MenuItemKey, MenuItem>
   baseMenuItemMap: Record<MenuItemKey, MenuItem>
   overrides: ReturnType<typeof getMenuOverrides>
-  updateMenuItem: (key: MenuItemKey, updates: { label?: string; price?: number }) => Promise<void>
+  updateMenuItem: typeof updateMenuItem
   resetMenuItem: (key: MenuItemKey) => Promise<void>
   resetAllMenuItems: () => Promise<void>
 }

@@ -72,9 +72,12 @@ export function OrderInputPage() {
           {menuItems.map((item) => {
             const displayLabel = getMenuItemLabel(item, language)
             const displayDescription = getMenuItemDescription(item, language)
+            const isSoldOut = item.soldOut
+            const cardClassName = `menu-card${isSoldOut ? ' sold-out' : ''}`
+            const currentQuantity = items[item.key] ?? 0
 
             return (
-              <article key={item.key} className="menu-card">
+              <article key={item.key} className={cardClassName} aria-disabled={isSoldOut}>
                 <div className="menu-card-media">
                   <img
                     src={item.image}
@@ -88,9 +91,19 @@ export function OrderInputPage() {
                 <div className="menu-card-body">
                   <header className="menu-card-header">
                     <h2 className="menu-card-title">{displayLabel}</h2>
-                    <span className="menu-card-price">¥{item.price.toLocaleString()}</span>
+                    <div className="menu-card-status">
+                      <span className="menu-card-price">¥{item.price.toLocaleString()}</span>
+                      {isSoldOut && (
+                        <span className="menu-card-badge" role="status">
+                          {texts.menu.soldOutBadge}
+                        </span>
+                      )}
+                    </div>
                   </header>
                   <p className="menu-card-description">{displayDescription}</p>
+                  {isSoldOut && (
+                    <p className="menu-card-soldout-note">{texts.menu.soldOutMessage}</p>
+                  )}
                   {item.allergens.length > 0 && (
                     <ul
                       className="menu-card-allergens"
@@ -123,8 +136,10 @@ export function OrderInputPage() {
                   )}
                   <div className="menu-card-footer">
                     <QuantityStepper
-                      value={items[item.key]}
+                      value={currentQuantity}
+                      disabled={isSoldOut}
                       onChange={(next) => {
+                        if (isSoldOut) return
                         updateQuantity(item.key, next)
                         if (formError) setFormError(null)
                       }}

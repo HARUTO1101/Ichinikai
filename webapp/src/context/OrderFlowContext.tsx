@@ -129,6 +129,20 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
 
   const hasItems = cartItems.length > 0
 
+  useEffect(() => {
+    setItems((prev) => {
+      let mutated = false
+      const next = { ...prev }
+      menuItems.forEach((menuItem) => {
+        if (menuItem.soldOut && next[menuItem.key] > 0) {
+          next[menuItem.key] = 0
+          mutated = true
+        }
+      })
+      return mutated ? next : prev
+    })
+  }, [menuItems])
+
   const buildOrderResultPayload = useCallback(async (summary: OrderSummary) => {
     const progressUrl = buildTicketUrl(summary.ticket)
     const qrCode = await QRCode.toDataURL(progressUrl, { width: 256, margin: 1 })
@@ -248,18 +262,21 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
       return
     }
 
+    let unsubscribed = false
+
     const unsubscribe = subscribeOrderLookup(activeTicket, (lookup) => {
       if (!lookup) {
         setOrderResult(null)
         return
       }
 
+      const nextSummary = createSummaryFromDetail(lookup)
+
       setOrderResult((prev) => {
         if (!prev) {
           return prev
         }
 
-        const nextSummary = createSummaryFromDetail(lookup)
         const prevSummary = prev.summary
 
         const hasChanges =
@@ -273,6 +290,11 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
           return prev
         }
 
+        if (nextSummary.progress === 'クローズ' && !unsubscribed) {
+          unsubscribed = true
+          unsubscribe()
+        }
+
         return {
           ...prev,
           summary: nextSummary,
@@ -281,7 +303,9 @@ export function OrderFlowProvider({ children }: { children: ReactNode }) {
     })
 
     return () => {
-      unsubscribe()
+      if (!unsubscribed) {
+        unsubscribe()
+      }
     }
   }, [activeTicket])
 

@@ -4,14 +4,19 @@ import { useOrdersSubscription } from '../../../hooks/useOrdersSubscription'
 
 import {
   type AuditShift,
+  type JankenAdjustmentSummary,
   SHIFT_OPTIONS,
   SHIFT_LABELS,
   VOUCHER_FACE_VALUE,
   VOUCHER_USAGE_EVENT,
+  getJankenAdjustmentStorageKey,
+  getJankenAdjustmentSummary,
   getVoucherUsageStorageKey,
   getVoucherUsageTotal,
   loadVoucherPresets,
   saveVoucherPresets,
+  JANKEN_ADJUSTMENT_EVENT,
+  JANKEN_ADJUSTMENT_UNIT,
 } from './cashAuditStorage'
 
 const BILL_DENOMINATIONS = [
@@ -54,6 +59,13 @@ const dateTimeFormatter = new Intl.DateTimeFormat('ja-JP', {
   dateStyle: 'medium',
   timeStyle: 'short',
 })
+
+function formatSignedCurrency(value: number): string {
+  const formatted = currencyFormatter.format(Math.abs(value))
+  if (value > 0) return `+${formatted}`
+  if (value < 0) return `-${formatted}`
+  return formatted
+}
 
 function createInitialCounts(): CashCounts {
   return ALL_DENOMINATIONS.reduce((accumulator, denomination) => {
@@ -118,6 +130,9 @@ export function AdminCashAuditView() {
   )
   const [voucherUsed, setVoucherUsed] = useState<number>(() => initialConfiguration.presets.open)
   const [voucherUsageTotal, setVoucherUsageTotal] = useState<number>(() => initialConfiguration.usageTotal)
+  const [jankenSummary, setJankenSummary] = useState<JankenAdjustmentSummary>(() =>
+    getJankenAdjustmentSummary(currentDate),
+  )
   const reportRef = useRef<HTMLDivElement | null>(null)
   const voucherPresetSourceRef = useRef(voucherPresetSource)
 
@@ -227,18 +242,29 @@ export function AdminCashAuditView() {
       })
     }
 
+    const handleJankenChange = () => {
+      const summary = getJankenAdjustmentSummary(currentDate)
+      setJankenSummary(summary)
+    }
+
     const usageStorageKey = getVoucherUsageStorageKey(currentDate)
+    const jankenStorageKey = getJankenAdjustmentStorageKey(currentDate)
 
     const handleStorage = (event: StorageEvent) => {
-      if (event.key !== usageStorageKey) return
-      handleUsageChange()
+      if (event.key === usageStorageKey) {
+        handleUsageChange()
+      } else if (event.key === jankenStorageKey) {
+        handleJankenChange()
+      }
     }
 
     window.addEventListener(VOUCHER_USAGE_EVENT, handleUsageChange)
+    window.addEventListener(JANKEN_ADJUSTMENT_EVENT, handleJankenChange)
     window.addEventListener('storage', handleStorage)
 
     return () => {
       window.removeEventListener(VOUCHER_USAGE_EVENT, handleUsageChange)
+      window.removeEventListener(JANKEN_ADJUSTMENT_EVENT, handleJankenChange)
       window.removeEventListener('storage', handleStorage)
     }
   }, [currentDate, persistVoucherState])
@@ -276,9 +302,29 @@ export function AdminCashAuditView() {
     [voucherUsed],
   )
 
+  const jankenPlusAmount = useMemo(
+    () => jankenSummary.plusCount * JANKEN_ADJUSTMENT_UNIT,
+    [jankenSummary.plusCount],
+  )
+
+  const jankenMinusAmount = useMemo(
+    () => -jankenSummary.minusCount * JANKEN_ADJUSTMENT_UNIT,
+    [jankenSummary.minusCount],
+  )
+
+  const jankenTotalCount = useMemo(
+    () => jankenSummary.plusCount + jankenSummary.minusCount,
+    [jankenSummary.plusCount, jankenSummary.minusCount],
+  )
+
+  const jankenNetLabel = useMemo(
+    () => formatSignedCurrency(jankenSummary.totalAmount),
+    [jankenSummary.totalAmount],
+  )
+
   const snapshotTimestamp = useMemo(
     () => new Date(),
-    [counts, note, auditShift, voucherUsed],
+    [counts, note, auditShift, voucherUsed, jankenSummary],
   )
 
   const handleCountChange = (value: DenominationValue) => (event: ChangeEvent<HTMLInputElement>) => {
@@ -394,6 +440,14 @@ export function AdminCashAuditView() {
               <strong>{numberFormatter.format(voucherUsageTotal)} 枚</strong>
               <span className="admin-cash-audit-voucher-usage-amount">
                 合計 {currencyFormatter.format(voucherUsageTotal * VOUCHER_FACE_VALUE)}
+              </span>
+            </div>
+            <div className="admin-cash-audit-janken-summary" aria-live="polite">
+              <span>じゃんけん調整</span>
+              <strong>{jankenNetLabel}</strong>
+              <span className="admin-cash-audit-janken-breakdown">
+                {formatSignedCurrency(JANKEN_ADJUSTMENT_UNIT)} {numberFormatter.format(jankenSummary.plusCount)} 件 /
+                {formatSignedCurrency(-JANKEN_ADJUSTMENT_UNIT)} {numberFormatter.format(jankenSummary.minusCount)} 件
               </span>
             </div>
           </div>
@@ -592,6 +646,10 @@ export function AdminCashAuditView() {
             <span className="admin-cash-audit-feedback-muted">
               金券 {numberFormatter.format(voucherUsed)} 枚（{currencyFormatter.format(voucherAmount)}）
             </span>
+            <span className="admin-cash-audit-feedback-muted">
+              じゃんけん {jankenNetLabel}（+{numberFormatter.format(jankenSummary.plusCount)} / -
+              {numberFormatter.format(jankenSummary.minusCount)} 件）
+            </span>
             <span className="admin-cash-audit-feedback-muted">点検区分 {shiftLabel}</span>
             {lastSavedAt && (
               <span className="admin-cash-audit-feedback-muted">
@@ -612,6 +670,10 @@ export function AdminCashAuditView() {
             <span>硬貨 {currencyFormatter.format(breakdown.coinTotal)}</span>
             <span>
               金券 {numberFormatter.format(voucherUsed)} 枚（{currencyFormatter.format(voucherAmount)}）
+            </span>
+            <span>
+              じゃんけん {jankenNetLabel}（+{numberFormatter.format(jankenSummary.plusCount)} / -
+              {numberFormatter.format(jankenSummary.minusCount)} 件）
             </span>
             <span>総枚数 {numberFormatter.format(breakdown.totalPieces)} 枚</span>
             <span>
@@ -680,6 +742,35 @@ export function AdminCashAuditView() {
                   <td>金券</td>
                   <td>{numberFormatter.format(voucherUsed)} 枚</td>
                   <td>{currencyFormatter.format(voucherAmount)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </article>
+          <article>
+            <h4>じゃんけん調整</h4>
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">項目</th>
+                  <th scope="col">件数</th>
+                  <th scope="col">金額</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>+{currencyFormatter.format(JANKEN_ADJUSTMENT_UNIT)}</td>
+                  <td>{numberFormatter.format(jankenSummary.plusCount)} 件</td>
+                  <td>{formatSignedCurrency(jankenPlusAmount)}</td>
+                </tr>
+                <tr>
+                  <td>-{currencyFormatter.format(JANKEN_ADJUSTMENT_UNIT)}</td>
+                  <td>{numberFormatter.format(jankenSummary.minusCount)} 件</td>
+                  <td>{formatSignedCurrency(jankenMinusAmount)}</td>
+                </tr>
+                <tr>
+                  <td>合計</td>
+                  <td>{numberFormatter.format(jankenTotalCount)} 件</td>
+                  <td>{formatSignedCurrency(jankenSummary.totalAmount)}</td>
                 </tr>
               </tbody>
             </table>

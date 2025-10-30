@@ -57,6 +57,31 @@
   border: 0;
 }
 
+.admin-menu-soldout-control {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-menu-soldout-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.admin-menu-soldout-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #2563eb;
+}
+
+.admin-menu-soldout-helper {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
 .admin-sidebar {
   background: linear-gradient(180deg, #1f2937 0%, #111827 100%);
   color: #fff;
@@ -2959,6 +2984,27 @@
   color: #334155;
 }
 
+.admin-cash-audit-janken-summary {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  background: linear-gradient(180deg, rgba(251, 191, 36, 0.12) 0%, rgba(253, 230, 138, 0.2) 100%);
+  display: grid;
+  gap: 4px;
+  color: #92400e;
+}
+
+.admin-cash-audit-janken-summary strong {
+  font-size: 1.1rem;
+  color: #b45309;
+}
+
+.admin-cash-audit-janken-breakdown {
+  font-size: 0.85rem;
+  color: #7c2d12;
+}
+
 .admin-cash-audit-shift-summary {
   margin-top: 18px;
   padding: 16px;
@@ -3084,6 +3130,116 @@
 .admin-payment-voucher-summary-amount {
   font-size: clamp(0.85rem, 2vw, 1rem);
   color: #334155;
+}
+
+.admin-payment-breakdown-note {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #475569;
+  text-align: right;
+}
+
+.admin-payment-janken-panel {
+  display: grid;
+  gap: 12px;
+  padding: clamp(12px, 1.5vw, 16px);
+  border-radius: 14px;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: rgba(254, 243, 199, 0.45);
+  text-align: left;
+}
+
+.admin-payment-janken-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.admin-payment-janken-fieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.admin-payment-janken-options {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-payment-janken-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #ffffff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  cursor: pointer;
+}
+
+.admin-payment-janken-option:hover {
+  border-color: rgba(245, 158, 11, 0.45);
+  transform: translateY(-1px);
+}
+
+.admin-payment-janken-option.is-active {
+  border-color: rgba(245, 158, 11, 0.8);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
+}
+
+.admin-payment-janken-fieldset[aria-disabled='true'] .admin-payment-janken-option {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  border-color: rgba(148, 163, 184, 0.35);
+  box-shadow: none;
+}
+
+.admin-payment-janken-option input {
+  width: 18px;
+  height: 18px;
+}
+
+.admin-payment-janken-label,
+.admin-payment-janken-description {
+  display: block;
+}
+
+.admin-payment-janken-label {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.admin-payment-janken-description {
+  margin-top: 2px;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.admin-payment-janken-summary {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #92400e;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-payment-janken-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #1f2937;
+}
+
+.admin-payment-janken-value.is-plus {
+  color: #166534;
+}
+
+.admin-payment-janken-value.is-minus {
+  color: #b91c1c;
 }
 
 .admin-cash-audit-report-grid {

@@ -1,23 +1,61 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { BrowserQRCodeReader } from '@zxing/browser'
 import { NotFoundException } from '@zxing/library'
 import { useOrdersSubscription } from '../../../hooks/useOrdersSubscription'
 import { updateOrderStatus } from '../../../services/orders'
-import { type PaymentStatus } from '../../../types/order'
+import { type MenuItemKey, type PaymentStatus } from '../../../types/order'
 import { getOrderConfirmationCode, mapOrderDetailToRow, type OrderRow } from './adminOrdersData'
 import { buildOrderItemEntries, OrderItemsInline } from './adminOrderItems'
 import {
+  JANKEN_ADJUSTMENT_UNIT,
+  getJankenAdjustmentAmount,
+  getJankenOutcomeForOrder,
   getVoucherUsageForOrder,
+  recordJankenOutcome,
   recordVoucherUsage,
+  removeJankenOutcome,
   removeVoucherUsage,
   VOUCHER_FACE_VALUE,
 } from './cashAuditStorage'
+import type { JankenOutcome } from './cashAuditStorage'
 
 type ReaderControls = Awaited<ReturnType<BrowserQRCodeReader['decodeFromVideoDevice']>>
 
 function formatCurrency(value: number) {
   return `¥${value.toLocaleString()}`
 }
+
+function formatSignedCurrency(value: number) {
+  const absolute = formatCurrency(Math.abs(value))
+  if (value > 0) return `+${absolute}`
+  if (value < 0) return `-${absolute}`
+  return absolute
+}
+
+const DRINK_MENU_KEYS: ReadonlyArray<MenuItemKey> = [
+  'drink_hojicha',
+  'drink_cocoa',
+  'drink_coffee',
+  'drink_milkcoffee',
+]
+
+const JANKEN_OPTIONS: ReadonlyArray<{ value: JankenOutcome; label: string; description: string }> = [
+  {
+    value: 'none',
+    label: 'じゃんけんなし（±¥0）',
+    description: '定価で会計',
+  },
+  {
+    value: 'plus',
+    label: `スタッフ勝ち（+${formatCurrency(JANKEN_ADJUSTMENT_UNIT)}）`,
+    description: '50円を追加で会計',
+  },
+  {
+    value: 'minus',
+    label: `お客様勝ち（-${formatCurrency(JANKEN_ADJUSTMENT_UNIT)}）`,
+    description: '50円を割引して会計',
+  },
+]
 
 const paymentStatusHistoryText: Record<PaymentStatus, string> = {
   未払い: '未払いに戻しました',
@@ -51,6 +89,7 @@ export function AdminPaymentsView() {
   const [mutatingId, setMutatingId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [voucherCount, setVoucherCount] = useState(0)
+  const [jankenOutcome, setJankenOutcome] = useState<JankenOutcome>('none')
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const controlsRef = useRef<ReaderControls | null>(null)
@@ -128,15 +167,52 @@ export function AdminPaymentsView() {
     setVoucherCount(clamped)
   }, [selectedOrder, maxVoucherCount])
 
+  useEffect(() => {
+    if (!selectedOrder) {
+      setJankenOutcome('none')
+      return
+    }
+    const items = selectedOrder.raw.items ?? {}
+    const hasDrink = DRINK_MENU_KEYS.some((key) => (items[key] ?? 0) > 0)
+    if (!hasDrink) {
+      setJankenOutcome('none')
+      return
+    }
+    const recordedOutcome = getJankenOutcomeForOrder(selectedOrder.id)
+    setJankenOutcome(recordedOutcome)
+  }, [selectedOrder])
+
   const voucherAmount = useMemo(
     () => voucherCount * VOUCHER_FACE_VALUE,
     [voucherCount],
   )
 
-  const cashDue = useMemo(
-    () => (selectedOrder ? Math.max(selectedOrder.total - voucherAmount, 0) : 0),
-    [selectedOrder, voucherAmount],
+  const selectedOrderHasDrink = useMemo(() => {
+    if (!selectedOrder) return false
+    const items = selectedOrder.raw.items ?? {}
+    return DRINK_MENU_KEYS.some((key) => (items[key] ?? 0) > 0)
+  }, [selectedOrder])
+
+  const jankenAdjustmentAmount = useMemo(
+    () => (selectedOrderHasDrink ? getJankenAdjustmentAmount(jankenOutcome) : 0),
+    [jankenOutcome, selectedOrderHasDrink],
   )
+
+  const adjustedTotal = useMemo(() => {
+    if (!selectedOrder) return 0
+    const baseTotal = selectedOrder.total
+    const adjusted = selectedOrderHasDrink ? baseTotal + jankenAdjustmentAmount : baseTotal
+    return adjusted < 0 ? 0 : adjusted
+  }, [selectedOrder, selectedOrderHasDrink, jankenAdjustmentAmount])
+
+  const cashDue = useMemo(
+    () => Math.max(adjustedTotal - voucherAmount, 0),
+    [adjustedTotal, voucherAmount],
+  )
+
+  const breakdownTotalLabel = selectedOrderHasDrink ? '調整後合計' : '合計'
+
+  const jankenDisabled = selectedOrder?.payment !== '未払い'
 
   const adjustVoucherCount = useCallback(
     (delta: number) => {
@@ -148,6 +224,11 @@ export function AdminPaymentsView() {
     },
     [maxVoucherCount],
   )
+
+  const handleJankenChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.currentTarget.value as JankenOutcome
+    setJankenOutcome(value)
+  }, [])
 
   const recentSettled = useMemo(
     () =>
@@ -218,15 +299,23 @@ export function AdminPaymentsView() {
         const maxForOrder = Math.max(0, Math.floor(order.total / VOUCHER_FACE_VALUE))
         const normalizedVoucherCount = Math.min(Math.max(0, appliedVoucherCount), maxForOrder)
         recordVoucherUsage(order.id, normalizedVoucherCount)
+        const appliedJankenOutcome =
+          selectedOrder?.id === order.id
+            ? selectedOrderHasDrink
+              ? jankenOutcome
+              : 'none'
+            : getJankenOutcomeForOrder(order.id)
+        recordJankenOutcome(order.id, appliedJankenOutcome)
         if (selectedId === order.id) {
           setScanMessage('支払い済みにしました。')
+          setJankenOutcome('none')
           setSelectedId(null)
         }
       } catch {
         // already handled in mutatePaymentStatus
       }
     },
-    [mutatePaymentStatus, selectedId, selectedOrder?.id, voucherCount],
+    [jankenOutcome, mutatePaymentStatus, selectedId, selectedOrder?.id, selectedOrderHasDrink, voucherCount],
   )
 
   const cancelOrder = useCallback(
@@ -240,9 +329,11 @@ export function AdminPaymentsView() {
       try {
         await mutatePaymentStatus(order, 'キャンセル')
         removeVoucherUsage(order.id)
+        removeJankenOutcome(order.id)
         if (selectedId === order.id) {
           setVoucherCount(0)
           setScanMessage('注文をキャンセルしました。')
+          setJankenOutcome('none')
           setSelectedId(null)
         }
       } catch {
@@ -257,8 +348,10 @@ export function AdminPaymentsView() {
       try {
         await mutatePaymentStatus(order, '未払い')
         removeVoucherUsage(order.id)
+        removeJankenOutcome(order.id)
         if (selectedId === order.id) {
           setVoucherCount(0)
+          setJankenOutcome('none')
         }
         setSelectedId(order.id)
         setScanMessage('支払いステータスを未払いに戻しました。')
@@ -553,7 +646,7 @@ export function AdminPaymentsView() {
                     <div className="admin-payment-breakdown-row prominent">
                       <p className="admin-payment-breakdown-label">現金</p>
                       <p className="admin-payment-cash-due" aria-live="polite">
-                        {selectedOrder ? formatCurrency(cashDue) : '¥0'}
+                        {formatCurrency(cashDue)}
                       </p>
                     </div>
                     <div className="admin-payment-breakdown-row">
@@ -582,11 +675,75 @@ export function AdminPaymentsView() {
                         </button>
                       </div>
                     </div>
+                    {selectedOrderHasDrink && (
+                      <div className="admin-payment-breakdown-row">
+                        <p className="admin-payment-breakdown-label">じゃんけん</p>
+                        <p
+                          className={`admin-payment-janken-value${
+                            jankenAdjustmentAmount > 0
+                              ? ' is-plus'
+                              : jankenAdjustmentAmount < 0
+                                ? ' is-minus'
+                                : ''
+                          }`}
+                        >
+                          {formatSignedCurrency(jankenAdjustmentAmount)}
+                        </p>
+                      </div>
+                    )}
                     <hr className="admin-payment-breakdown-divider" />
                     <p className="admin-payment-breakdown-total" aria-live="polite">
-                      合計 {selectedOrder ? formatCurrency(selectedOrder.total) : '¥0'}
+                      {breakdownTotalLabel} {formatCurrency(adjustedTotal)}
                     </p>
+                    {selectedOrderHasDrink && (
+                      <p className="admin-payment-breakdown-note">
+                        通常合計 {formatCurrency(selectedOrder.total)}
+                      </p>
+                    )}
                   </section>
+                  {selectedOrderHasDrink && (
+                    <section className="admin-payment-janken-panel" aria-label="ドリンクじゃんけん調整">
+                      <p className="admin-payment-janken-title">ドリンクじゃんけん</p>
+                      <fieldset className="admin-payment-janken-fieldset" aria-disabled={jankenDisabled}>
+                        <legend className="sr-only">じゃんけん結果を選択</legend>
+                        <div className="admin-payment-janken-options">
+                          {JANKEN_OPTIONS.map((option) => (
+                            <label
+                              key={option.value}
+                              className={`admin-payment-janken-option${
+                                jankenOutcome === option.value ? ' is-active' : ''
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="admin-payment-janken"
+                                value={option.value}
+                                checked={jankenOutcome === option.value}
+                                onChange={handleJankenChange}
+                                disabled={jankenDisabled}
+                              />
+                              <span className="admin-payment-janken-label">{option.label}</span>
+                              <span className="admin-payment-janken-description">{option.description}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+                      <p className="admin-payment-janken-summary" aria-live="polite">
+                        調整額{' '}
+                        <span
+                          className={`admin-payment-janken-value${
+                            jankenAdjustmentAmount > 0
+                              ? ' is-plus'
+                              : jankenAdjustmentAmount < 0
+                                ? ' is-minus'
+                                : ''
+                          }`}
+                        >
+                          {formatSignedCurrency(jankenAdjustmentAmount)}
+                        </span>
+                      </p>
+                    </section>
+                  )}
                   <div className="admin-payment-voucher-summary" aria-live="polite">
                     <p className="admin-payment-voucher-summary-label">金券枚数</p>
                     <p className="admin-payment-voucher-summary-value">

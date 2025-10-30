@@ -54,6 +54,7 @@ export function AdminSettingsView() {
     () => buildFeedbackMap(),
   )
   const [globalFeedback, setGlobalFeedback] = useState<FeedbackMessage | null>(null)
+  const [soldOutPending, setSoldOutPending] = useState<Record<MenuItemKey, boolean>>({})
 
   useEffect(() => {
     setDrafts(buildDraftMap())
@@ -123,6 +124,40 @@ export function AdminSettingsView() {
         ...prev,
         [key]: { type: 'error', message: '保存に失敗しました。もう一度お試しください。' },
       }))
+    }
+  }
+
+  const handleToggleSoldOut = async (key: MenuItemKey, nextSoldOut: boolean) => {
+    setGlobalFeedback(null)
+    setItemFeedback((prev) => ({
+      ...prev,
+      [key]: null,
+    }))
+    setSoldOutPending((prev) => ({ ...prev, [key]: true }))
+    try {
+      await updateMenuItem(key, { soldOut: nextSoldOut })
+      setItemFeedback((prev) => ({
+        ...prev,
+        [key]: {
+          type: 'success',
+          message: nextSoldOut ? '売り切れに設定しました。' : '販売を再開しました。',
+        },
+      }))
+    } catch (error) {
+      console.error('在庫状態の更新に失敗しました', error)
+      setItemFeedback((prev) => ({
+        ...prev,
+        [key]: {
+          type: 'error',
+          message: '状態を更新できませんでした。もう一度お試しください。',
+        },
+      }))
+    } finally {
+      setSoldOutPending((prev) => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
     }
   }
 
@@ -310,6 +345,22 @@ export function AdminSettingsView() {
                       }}
                     />
                   </label>
+                </div>
+                <div className="admin-menu-soldout-control">
+                  <label className="admin-menu-soldout-toggle">
+                    <input
+                      type="checkbox"
+                      checked={item.soldOut}
+                      onChange={(event) => {
+                        void handleToggleSoldOut(item.key, event.target.checked)
+                      }}
+                      disabled={Boolean(soldOutPending[item.key])}
+                    />
+                    <span>{item.soldOut ? '売り切れ中' : '販売中'}</span>
+                  </label>
+                  <p className="admin-menu-soldout-helper">
+                    売り切れにすると購入画面ではグレーアウト表示され、数量を選べなくなります。
+                  </p>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                   <button

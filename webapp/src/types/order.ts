@@ -65,6 +65,7 @@ export interface MenuItem {
   price: number
   image: string
   allergens: ReadonlyArray<AllergenKey>
+  soldOut: boolean
 }
 
 export type MenuVariantKey = 'day12' | 'day34'
@@ -73,42 +74,47 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
   potaufeu: {
     key: 'potaufeu',
     label: 'ポトフ',
-    description: '野菜たっぷりの温かいスープでほっと一息',
+    description: '生姜たくさん入ってます！ぜひポトフを飲んであったまってください！',
     price: 250,
     image: withBase('menu_photo/5.png'),
     allergens: ['soy'],
+    soldOut: false,
   },
   plain: {
     key: 'plain',
     label: '揚げパン(プレーン)',
-    description: 'あつあつの揚げパンに砂糖をまぶしました',
+    description: 'やっぱり王道プレーン味！揚げパン沼にお連れします！是非にお試しあれ🙌',
     price: 250,
     image: withBase('menu_photo/1.png'),
     allergens: ['wheat', 'egg'],
+    soldOut: false,
   },
   cocoa: {
     key: 'cocoa',
     label: '揚げパン(ココア)',
-    description: 'ビターなココアパウダーとチョコソース',
+    description: '揚げパン×ココアなんておいしくないわけがない！みんな虜にしちゃいます！',
     price: 250,
     image: withBase('menu_photo/2.png'),
     allergens: ['wheat', 'egg', 'soy'],
+    soldOut: false,
   },
   kinako: {
     key: 'kinako',
     label: '揚げパン(きなこ)',
-    description: '国産きなこと黒蜜の和風仕立て',
+    description: '給食で出てきた懐かしの味！みんな大好ききなこ揚げパン！',
     price: 250,
     image: withBase('menu_photo/3.png'),
     allergens: ['wheat', 'soy'],
+    soldOut: false,
   },
   garlic: {
     key: 'garlic',
     label: '揚げパン(ガーリック)',
-    description: '揚げたてポテトにガーリックソルトを効かせました',
+    description: '甘くない揚げパンだって大アリなんです！あなたの価値観変えちゃいます',
     price: 250,
     image: withBase('menu_photo/4.png'),
     allergens: ['wheat'],
+    soldOut: false,
   },
   drink_hojicha: {
     key: 'drink_hojicha',
@@ -117,6 +123,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     price: 150,
     image: withBase('menu_photo/6.png'),
     allergens: [],
+    soldOut: false,
   },
   drink_cocoa: {
     key: 'drink_cocoa',
@@ -125,6 +132,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     price: 150,
     image: withBase('menu_photo/7.png'),
     allergens: [],
+    soldOut: false,
   },
   drink_coffee: {
     key: 'drink_coffee',
@@ -133,6 +141,7 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     price: 150,
     image: withBase('menu_photo/8.png'),
     allergens: [],
+    soldOut: false,
   },
   drink_milkcoffee: {
     key: 'drink_milkcoffee',
@@ -141,46 +150,52 @@ const MENU_ITEM_DEFINITIONS: Record<MenuItemKey, MenuItem> = {
     price: 150,
     image: withBase('menu_photo/9.png'),
     allergens: [],
+    soldOut: false,
   },
   minestrone: {
     key: 'minestrone',
     label: 'ミネストローネ',
-    description: 'トマトベースの具だくさんスープで体ぽかぽか',
-    price: 320,
+    description: '具沢山なイタリアの家庭料理を召し上がれ💕 トマトの恵みを丸ごと味わう、飲む美容液。',
+    price: 250,
     image: withBase('menu_photo/5.png'),
     allergens: ['soy'],
+    soldOut: false,
   },
   strawberry: {
     key: 'strawberry',
     label: 'スモア(いちごジャム味)',
-    description: '甘酸っぱいいちごジャムとマシュマロのハーモニー',
+    description: ' 恋の味って、たぶんこれ。甘くてちょっと酸っぱい、青春スモア🍓',
     price: 250,
     image: withBase('menu_photo/1.png'),
     allergens: ['wheat', 'egg'],
+    soldOut: false,
   },
   blueberry: {
     key: 'blueberry',
     label: 'スモア(ブルーベリージャム味)',
-    description: '甘酸っぱいブルーベリージャムとマシュマロのハーモニー',
+    description: ' ブルーベリーの甘みと酸味で頭スッキリ。三限目の眠気も吹っ飛ぶ（かも？）🫐',
     price: 250,
     image: withBase('menu_photo/2.png'),
     allergens: ['wheat', 'egg', 'soy'],
+    soldOut: false,
   },
   chocolate: {
     key: 'chocolate',
     label: 'スモア(チョコ味)',
-    description: '濃厚チョコレートソースとマシュマロのハーモニー',
+    description: '悩んだらチョコ。迷ったらチョコ。人生もスモアも、まずはチョコ。🍫',
     price: 250,
     image: withBase('menu_photo/3.png'),
     allergens: ['wheat', 'soy'],
+    soldOut: false,
   },
   honey: {
     key: 'honey',
     label: 'スモア(はちみつ味)',
-    description: '香ばしいはちみつとマシュマロのハーモニー',
+    description: ' 疲れたあなたに、甘〜い救済。ハチもびっくりのしあわせスモア🐝🍯',
     price: 250,
     image: withBase('menu_photo/4.png'),
     allergens: ['wheat'],
+    soldOut: false,
   },
 }
 

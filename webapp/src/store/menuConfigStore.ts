@@ -13,6 +13,7 @@ import { MENU_ITEMS, type MenuItem, type MenuItemKey } from '../types/order'
 interface MenuOverride {
   label?: string
   price?: number
+  soldOut?: boolean
 }
 
 export type MenuOverrides = Partial<Record<MenuItemKey, MenuOverride>>
@@ -51,6 +52,11 @@ const sanitizePrice = (value: number | undefined, basePrice: number): number | u
   return normalized
 }
 
+const sanitizeSoldOut = (value: unknown, baseSoldOut: boolean): boolean | undefined => {
+  if (typeof value !== 'boolean') return undefined
+  return value === baseSoldOut ? undefined : value
+}
+
 const sanitizeOverridesRecord = (raw: unknown): MenuOverrides => {
   if (!raw || typeof raw !== 'object') return {}
 
@@ -61,12 +67,14 @@ const sanitizeOverridesRecord = (raw: unknown): MenuOverrides => {
       const base = MENU_ITEMS[key]
       const label = sanitizeLabel((value as MenuOverride).label, base.label)
       const price = sanitizePrice((value as MenuOverride).price, base.price)
+      const soldOut = sanitizeSoldOut((value as MenuOverride).soldOut, base.soldOut)
 
-      if (!label && !Number.isFinite(price)) return acc
+      if (!label && !Number.isFinite(price) && typeof soldOut !== 'boolean') return acc
 
       const override: MenuOverride = {}
       if (label) override.label = label
       if (Number.isFinite(price)) override.price = price
+      if (typeof soldOut === 'boolean') override.soldOut = soldOut
       acc[key] = override
       return acc
     },
@@ -107,11 +115,13 @@ const buildSnapshot = (): MenuSnapshot => {
       const override = overrides[typedKey] ?? {}
       const label = override.label ?? base.label
       const price = override.price ?? base.price
+      const soldOut = override.soldOut ?? base.soldOut
 
       acc[typedKey] = {
         ...base,
         label,
         price,
+        soldOut,
       }
       return acc
     },
@@ -134,7 +144,11 @@ const overridesEqual = (next: MenuOverrides, prev: MenuOverrides): boolean => {
     const prevValue = prev[key]
     if (!nextValue && !prevValue) return true
     if (!nextValue || !prevValue) return false
-    return nextValue.label === prevValue.label && nextValue.price === prevValue.price
+    return (
+      nextValue.label === prevValue.label &&
+      nextValue.price === prevValue.price &&
+      nextValue.soldOut === prevValue.soldOut
+    )
   })
 }
 
@@ -234,29 +248,65 @@ export const subscribeMenuConfig = (listener: () => void): (() => void) => {
 
 export const updateMenuItem = async (
   key: MenuItemKey,
-  updates: { label?: string; price?: number },
+  updates: { label?: string; price?: number; soldOut?: boolean },
 ): Promise<void> => {
   const base = MENU_ITEMS[key]
   if (!base) {
     throw new Error(`Unknown menu item key: ${key}`)
   }
 
-  const nextLabel = sanitizeLabel(updates.label, base.label)
-  const nextPrice = sanitizePrice(updates.price, base.price)
-
   const current = overrides[key] ?? {}
-  const nextOverride: MenuOverride = {}
+  const nextOverride: MenuOverride = { ...current }
+  let updated = false
 
-  if (nextLabel) {
-    nextOverride.label = nextLabel
+  const hasLabelUpdate = Object.prototype.hasOwnProperty.call(updates, 'label')
+  if (hasLabelUpdate) {
+    const nextLabel = sanitizeLabel(updates.label, base.label)
+    if (typeof nextLabel === 'string') {
+      if (nextOverride.label !== nextLabel) {
+        nextOverride.label = nextLabel
+        updated = true
+      }
+    } else if (nextOverride.label !== undefined) {
+      delete nextOverride.label
+      updated = true
+    }
   }
 
-  if (Number.isFinite(nextPrice)) {
-    nextOverride.price = nextPrice
+  const hasPriceUpdate = Object.prototype.hasOwnProperty.call(updates, 'price')
+  if (hasPriceUpdate) {
+    const nextPrice = sanitizePrice(updates.price, base.price)
+    if (typeof nextPrice === 'number') {
+      if (nextOverride.price !== nextPrice) {
+        nextOverride.price = nextPrice
+        updated = true
+      }
+    } else if (nextOverride.price !== undefined) {
+      delete nextOverride.price
+      updated = true
+    }
+  }
+
+  const hasSoldOutUpdate = Object.prototype.hasOwnProperty.call(updates, 'soldOut')
+  if (hasSoldOutUpdate) {
+    const nextSoldOut = sanitizeSoldOut(updates.soldOut, base.soldOut)
+    if (typeof nextSoldOut === 'boolean') {
+      if (nextOverride.soldOut !== nextSoldOut) {
+        nextOverride.soldOut = nextSoldOut
+        updated = true
+      }
+    } else if (nextOverride.soldOut !== undefined) {
+      delete nextOverride.soldOut
+      updated = true
+    }
+  }
+
+  if (!updated) {
+    return
   }
 
   if (Object.keys(nextOverride).length === 0) {
-    if (!current || (!current.label && !Number.isFinite(current.price))) {
+    if (!overrides[key]) {
       return
     }
     const withoutCurrent = { ...overrides }
@@ -264,11 +314,6 @@ export const updateMenuItem = async (
     await commitOverrides(withoutCurrent)
     return
   }
-
-  const hasChanged =
-    nextOverride.label !== current.label || nextOverride.price !== current.price
-
-  if (!hasChanged) return
 
   const nextOverrides = {
     ...overrides,
